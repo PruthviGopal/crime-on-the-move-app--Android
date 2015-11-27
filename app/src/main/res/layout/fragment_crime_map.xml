@@ -1,0 +1,43 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_height="fill_parent"
+    android:layout_width="fill_parent"
+    android:orientation="vertical">
+
+    <FrameLayout android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        tools:context="com.edg.crimeonthemove.MapFragment">
+
+        <com.google.android.gms.maps.MapView
+            android:id="@+id/mapview"
+            android:layout_width="fill_parent"
+            android:layout_height="fill_parent" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="fill_parent"
+        android:layout_height="60dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/button_get_crime_data"
+            android:layout_width="100dp"
+            android:layout_height="fill_parent"
+            android:text="Update Data"/>
+
+        <Button
+            android:id="@+id/button_get_clustering"
+            android:layout_width="100dp"
+            android:layout_height="fill_parent"
+            android:text="Update Clustering Data"/>
+
+        <Button
+            android:id="@+id/button_get_overlays"
+            android:layout_width="100dp"
+            android:layout_height="fill_parent"
+            android:text="Get County Overlays"/>
+
+    </LinearLayout>
+</LinearLayout>

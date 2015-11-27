@@ -1,0 +1,82 @@
+<ScrollView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:context="com.edg.crimeonthemove.DataSettingsFragment"
+    android:layout_width="fill_parent"
+    android:layout_height="fill_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/data_selection_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Data Set Selection" />
+        <CheckBox
+            android:id="@+id/checkbox_nova_data"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nova Data"
+            android:checked="true"/>
+        <CheckBox
+            android:id="@+id/checkbox_dc_data"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="DC Data"
+            android:checked="true"/>
+
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Clustering Algorithm Selection"/>
+        <RadioGroup
+            android:id="@+id/radio_group_clustering_algorithm_choice"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content">
+
+            <RadioButton
+                android:id="@+id/radio_button_k_means"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="K-Means"/>
+            <RadioButton
+                android:id="@+id/radio_button_spectral_clustering"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="Spectral Clustering"/>
+        </RadioGroup>
+
+        <TextView
+            android:id="@+id/k_means_parameters_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="K-Means Parameter Selection" />
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Number of K-Means Clusters" />
+        <SeekBar
+            android:id="@+id/seek_bar_k_means_clusters"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/spectral_clustering_parameters_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Spectral Clustering Parameter Selection" />
+        <TextView
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Number of Spectral Clustering Clusters" />
+        <SeekBar
+            android:id="@+id/seek_bar_spectral_clustering_clusters"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" />
+        </LinearLayout>
+</ScrollView>
