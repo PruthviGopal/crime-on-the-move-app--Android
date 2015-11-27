@@ -2,11 +2,12 @@ package com.edg.crimeonthemove;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Looper;
 import android.support.v4.app.Fragment;
-import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -24,7 +25,6 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
 
-import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.util.ArrayList;
@@ -62,12 +62,19 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     private SharedPreferences mOptions;
     private Cache mCache;
 
+    private final HandlerThread handlerThread = new HandlerThread("UI Offloader");
+    private Handler handler;
+    private final Handler mainThreadHandler = new Handler(Looper.getMainLooper());
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mAreaOverlays = new ArrayList<>(5);
+        mAreaOverlays = new ArrayList<>(135);
         mMarkers = new ArrayList<>(3000);
         mCache = new Cache();
+
+        handlerThread.start();
+        handler = new Handler(handlerThread.getLooper());
     }
 
     @Override
@@ -147,6 +154,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     public void onDestroy() {
         super.onDestroy();
         mMapView.onDestroy();
+        handlerThread.quit();
     }
 
     @Override
@@ -195,11 +203,14 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     public void addAreaOverlay(Map<String, List<LatLng>> areaBoundaries,
-            Map<String, Map<String, String>> areaStatistics) {
+                               Map<String, Map<String, String>> areaStatistics) {
+
+        // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
         for (int i = 0; i < mAreaOverlays.size(); i++) {
             mAreaOverlays.get(i).remove();
         }
         mAreaOverlays.clear();
+
         // TODO: Remove....
         mGoogleMap.clear();
         final int[] colors = {
@@ -222,31 +233,124 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 0x8F93AA00, // Vivid Yellowish Green
                 0x8F593315, // Deep Yellowish Brown
                 0x8FF13A13, // Vivid Reddish Orange
-                0x8F232C16 // Dark Olive Green
+                0x8F232C16  // Dark Olive Green
         };
         //Polygon polygon;
         Marker marker;
         Map<String, String> specificAreaStatistics;
         String statisticsString;
-        try {
-            mCache.runQuery(new Cache.CountyQuery(getContext()) {
-                @Override
-                public void useData(String countyName, List<LatLng> countyOutline) {
-                    // Take hash code and mod by color length, this should produce random enough color
-                    // dispersion to be visually appealing.
-                    int colorKey = countyName.hashCode() % colors.length;
-                    Polygon polygon = mGoogleMap.addPolygon(new PolygonOptions()
-                            .addAll(countyOutline)
-                            .fillColor(colors[colorKey])
-                            .strokeColor(colors[colorKey])
-                            .zIndex(20));
-                    mAreaOverlays.add(polygon);
+        Polygon polygon;
+        for (String key : areaBoundaries.keySet()) {
+            // Handle coloring for integer strings and regular strings
+            if (isInteger(key)
+                    && Integer.parseInt(key) < colors.length && Integer.parseInt(key) > -1) {
+                polygon = mGoogleMap.addPolygon(new PolygonOptions()
+                        .addAll(areaBoundaries.get(key))
+                        .fillColor(colors[Integer.parseInt(key)])
+                        .strokeColor(colors[Integer.parseInt(key)])
+                        .zIndex(20));
+            } else {
+                // Take hash code and mod by color length, this should produce random enough color
+                // dispersion to be visually appealing.
+                int colorKey = key.hashCode() % colors.length;
+                polygon = mGoogleMap.addPolygon(new PolygonOptions()
+                        .addAll(areaBoundaries.get(key))
+                        .fillColor(colors[colorKey])
+                        .strokeColor(colors[colorKey])
+                        .zIndex(20));
+            }
+            mAreaOverlays.add(polygon);
+
+            // If there are statistics, display them
+            Log.i(TAG, "areaStatistics: " + areaStatistics);
+            if (areaStatistics.size() > 0) {
+                specificAreaStatistics = areaStatistics.get(key);
+                statisticsString = "";
+                for (String statisticsKey : specificAreaStatistics.keySet()) {
+                    statisticsString += specificAreaStatistics.get(statisticsKey);
+                    statisticsString += "\n";
                 }
-            });
-        } catch (JSONException e) {
-            e.printStackTrace();
-            Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
+                marker = mGoogleMap.addMarker(new MarkerOptions()
+                        .position(areaBoundaries.get(key).get(0))
+                        .title("Cluster " + key)
+                        .snippet(statisticsString));
+                marker.showInfoWindow();
+            }
         }
+    }
+
+    public void addCountyOverlay(Map<String, List<LatLng>> areaBoundaries,
+            Map<String, Map<String, String>> areaStatistics) {
+        /*
+        TODO: I need to figure out how I'm REALLY going to be managing these overlays....
+        for (int i = 0; i < mAreaOverlays.size(); i++) {
+            mAreaOverlays.get(i).remove();
+        }
+        mAreaOverlays.clear();
+        */
+        // TODO: Remove....
+        mGoogleMap.clear();
+        final int[] colors = {
+                0x8FFFB300, // Vivid Yellow
+                0x8F803E75, // Strong Purple
+                0x8FFF6800, // Vivid Orange
+                0x8FA6BDD7, // Very Light Blue
+                0x8FC10020, // Vivid Red
+                0x8FCEA262, // Grayish Yellow
+                0x8F817066, // Medium Gray
+                0x8F007D34, // Vivid Green
+                0x8FF6768E, // Strong Purplish Pink
+                0x8F00538A, // Strong Blue
+                0x8FFF7A5C, // Strong Yellowish Pink
+                0x8F53377A, // Strong Violet
+                0x8FFF8E00, // Vivid Orange Yellow
+                0x8FB32851, // Strong Purplish Red
+                0x8FF4C800, // Vivid Greenish Yellow
+                0x8F7F180D, // Strong Reddish Brown
+                0x8F93AA00, // Vivid Yellowish Green
+                0x8F593315, // Deep Yellowish Brown
+                0x8FF13A13, // Vivid Reddish Orange
+                0x8F232C16  // Dark Olive Green
+        };
+        //Polygon polygon;
+        Marker marker;
+        Map<String, String> specificAreaStatistics;
+        String statisticsString;
+
+        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....", Toast.LENGTH_LONG).show();
+        final Cache.NovaCountyQuery novaCountyQuery = new Cache.NovaCountyQuery(getContext()) {
+            @Override
+            public void useData(String countyName, final List<LatLng> countyOutline) {
+                // Take hash code and mod by color length, this should produce random enough color
+                // dispersion to be visually appealing.
+                final int colorKey = ((Math.abs(countyName.hashCode()) % colors.length) * 57 + 13) % colors.length;
+                // Run UI rendering on the main thread
+                mainThreadHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Polygon polygon = mGoogleMap.addPolygon(new PolygonOptions()
+                                .addAll(countyOutline)
+                                .fillColor(colors[colorKey])
+                                .strokeColor(colors[colorKey])
+                                .zIndex(20));
+                        mAreaOverlays.add(polygon);
+                    }
+                });
+            }
+        };
+
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mCache.runQuery(novaCountyQuery);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                    Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
+                }
+                Toast.makeText(getContext(), "Done drawing areas!", Toast.LENGTH_SHORT).show();
+            }
+        });
         //for (String key : areaBoundaries.keySet()) {
             /*
             // Handle coloring for integer strings and regular strings

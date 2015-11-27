@@ -15,7 +15,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Created by egaebel on 11/26/15.
+ * Utility class with static methods.
+ * Right now it only has JSON utilities.....There may be a rename in this class' future.
  */
 public class Utils {
 

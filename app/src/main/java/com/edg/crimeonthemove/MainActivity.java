@@ -273,10 +273,7 @@ public class MainActivity extends FragmentActivity
                     FragmentManager fragmentManager = getSupportFragmentManager();
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
-                    /*
-                    crimeMapFragment.addAreaOverlay(jsonMapOfLists, areaStatistics);
-                    */
-                    crimeMapFragment.addAreaOverlay(null, null);
+                    crimeMapFragment.addCountyOverlay(null, null);
                 }
             }
         }, params);

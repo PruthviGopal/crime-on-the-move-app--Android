@@ -18,12 +18,20 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Created by egaebel on 11/26/15.
+ * Provides access to a SQLite cache.
+ * Data is added to it through methods taking JSON objects (where the raw json strings are cached).
+ * Data is retrieved from it through overriding various CacheQuery objects and passing
+ * them to runQuery.
  */
 public class Cache {
 
     private static final String TAG = "Cache";
 
+    /**
+     * A class which defines a framework by which any query can be executed generically.
+     * Requires a context object to access the database, the context is de-referenced in finish()
+     * to avoid memory leaks.
+     */
     private static abstract class CacheQuery {
 
         protected Context mContext;
@@ -39,9 +47,14 @@ public class Cache {
         public abstract void execute() throws JSONException;
     }
 
-    public static abstract class CountyQuery extends CacheQuery {
+    /**
+     * CacheQuery used to retrieve Nova counties from the cache.
+     * The useData function should be overriden so that any type of object can use the data retrieved
+     * in any way they wish.
+     */
+    public static abstract class NovaCountyQuery extends CacheQuery {
 
-        public CountyQuery(Context context) {
+        public NovaCountyQuery(Context context) {
             super(context);
         }
 
@@ -51,7 +64,7 @@ public class Cache {
             DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(mContext);
             SQLiteDatabase database = accessPoint.getReadableDatabase();
 
-            Cursor cursor = database.query(COUNTY_OUTLINE_TABLE_NAME, null, null, null, null, null, null, null);
+            Cursor cursor = database.query(NOVA_COUNTY_OUTLINE_TABLE_NAME, null, null, null, null, null, null, null);
             JSONArray jsonCountyOutline;
             List<LatLng> countyOutline;
             while (cursor.moveToNext()) {
@@ -61,7 +74,7 @@ public class Cache {
                     Utils.parseArea(countyOutline, jsonCountyOutline);
                     useData(cursor.getString(0), countyOutline);
                 } else {
-                    Log.w(TAG, "THERE IS A NULL FIELD IN THE COUNTY OUTLINES TABLE!");
+                    Log.w(TAG, "THERE IS A NULL FIELD IN THE NOVA COUNTY OUTLINES TABLE!");
                 }
             }
             cursor.close();
@@ -69,13 +82,45 @@ public class Cache {
         }
     }
 
+    /**
+     * Takes an instance of a CacheQuery class and executes its operation.
+     *
+     * @param query a sub-class of the CacheQuery class which is to be overridden to provide
+     *              specific query access to the cache followed by parsing (hence the JSONException).
+     * @throws JSONException
+     */
     public void runQuery(CacheQuery query) throws JSONException {
         query.execute();
         query.finish();
     }
 
-    public void insertCountyData(Context context, JSONObject response) throws JSONException {
+    /**
+     * Insert Nova crime data
+     *
+     * @param context
+     */
+    public void insertNovaCrimeData(Context context) {
 
+    }
+
+    /**
+     * Insert DC crime data
+     *
+     * @param context
+     */
+    public void insertDCCrimeData(Context context) {
+
+    }
+
+    /**
+     * Insert nova county data contained in the JSONObject.
+     *
+     * @param context application context used for database access.
+     * @param response the JSONObject containing JSON representing a nova county outline.
+     * @throws JSONException
+     */
+    public void insertNovaCountyData(Context context, JSONObject response) throws JSONException {
+        Log.v(TAG, "insertNovaCountyData");
         DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(context);
         SQLiteDatabase database = accessPoint.getWritableDatabase();
 
@@ -89,23 +134,59 @@ public class Cache {
             key = keyIt.next();
             jsonAreaPoints = areaOutlinesObject.getJSONArray(key);
             contentValues = new ContentValues();
-            contentValues.put(COUNTY_OUTLINE_COUNTY_NAME_COLUMN, key);
-            contentValues.put(COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN, jsonAreaPoints.toString());
-            database.insert(COUNTY_OUTLINE_TABLE_NAME, null, contentValues);
+            contentValues.put(NOVA_COUNTY_OUTLINE_COUNTY_NAME_COLUMN, key);
+            contentValues.put(NOVA_COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN, jsonAreaPoints.toString());
+            database.insert(NOVA_COUNTY_OUTLINE_TABLE_NAME, null, contentValues);
         }
+        database.close();
+
+        database = accessPoint.getReadableDatabase();
+        Log.d(TAG, "database insertion sanity check: ");
+        Cursor cursor = database.rawQuery("SELECT COUNT(*) FROM " + NOVA_COUNTY_OUTLINE_TABLE_NAME + ";", null);
+        cursor.moveToFirst();
+        Log.d(TAG, "Count: ||" + cursor.getString(0)  + "||");
         database.close();
     }
 
-    private static final int DATABASE_VERSION = 3;
+    /**
+     * Performs a checksum on the number of rows in the nova county table.
+     * @param context used for database access.
+     * @return the number of rows in the nova county outlines table.
+     */
+    public int novaCountyRowsCheckSum(Context context) {
+        int countyRowsCheckSum;
+        DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(context);
+        SQLiteDatabase database = accessPoint.getReadableDatabase();
+        Cursor cursor = database.rawQuery("SELECT * FROM " + NOVA_COUNTY_OUTLINE_TABLE_NAME + ";", null);
+        countyRowsCheckSum = cursor.getCount();
+        cursor.close();
+        database.close();
+        return countyRowsCheckSum;
+    }
+
+    /**
+     * Removes all rows from the nova county outline table.
+     * Cache invalidation.
+     * @param context used for database access.
+     */
+    public void wipeCountyRows(Context context) {
+        Log.w(TAG, "wipeCountyRows");
+        DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(context);
+        SQLiteDatabase database = accessPoint.getWritableDatabase();
+        database.delete(NOVA_COUNTY_OUTLINE_TABLE_NAME, null, null);
+        database.close();
+    }
+
+    private static final int DATABASE_VERSION = 5;
     private static final String DATABASE_NAME = "CrimeOnTheMoveSQLiteCache";
-    private static final String COUNTY_OUTLINE_TABLE_NAME = "county_outlines";
-    private static final String COUNTY_OUTLINE_COUNTY_NAME_COLUMN = "county_name";
-    private static final String COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN = "points_json";
-    private static final String CREATE_COUNTY_OUTLINE_TABLE_SQL
-            = "CREATE TABLE " + COUNTY_OUTLINE_TABLE_NAME
+    private static final String NOVA_COUNTY_OUTLINE_TABLE_NAME = "nova_county_outlines";
+    private static final String NOVA_COUNTY_OUTLINE_COUNTY_NAME_COLUMN = "county_name";
+    private static final String NOVA_COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN = "points_json";
+    private static final String CREATE_NOVA_COUNTY_OUTLINE_TABLE_SQL
+            = "CREATE TABLE " + NOVA_COUNTY_OUTLINE_TABLE_NAME
                 + "("
-                + COUNTY_OUTLINE_COUNTY_NAME_COLUMN + " TEXT, "
-                + COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN + " TEXT"
+                + NOVA_COUNTY_OUTLINE_COUNTY_NAME_COLUMN + " TEXT PRIMARY KEY, "
+                + NOVA_COUNTY_OUTLINE_COUNTY_OUTLINE_COLUMN + " TEXT"
                 + ");";
     private static final String CREATE_NOVA_CRIME_DATA_TABLE_SQL
             = "CREATE TABLE";
@@ -126,7 +207,7 @@ public class Cache {
          */
         @Override
         public void onCreate(SQLiteDatabase db) {
-            db.execSQL(CREATE_COUNTY_OUTLINE_TABLE_SQL);
+            db.execSQL(CREATE_NOVA_COUNTY_OUTLINE_TABLE_SQL);
             // db.execSQL(CREATE_NOVA_CRIME_DATA_TABLE_SQL);
             // db.execSQL(CREATE_DC_CRIME_DATA_TABLE_SQL);
         }
@@ -153,7 +234,9 @@ public class Cache {
          */
         @Override
         public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-
+            Log.w(TAG, "onUpgrade Called!");
+            // db.execSQL("DROP TABLE county_outlines;");
+            // db.execSQL(CREATE_NOVA_COUNTY_OUTLINE_TABLE_SQL);
         }
     }
 }

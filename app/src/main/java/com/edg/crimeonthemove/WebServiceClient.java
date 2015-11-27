@@ -5,11 +5,13 @@ import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
+
 import com.loopj.android.http.AsyncHttpClient;
 import com.loopj.android.http.RequestParams;
 import com.loopj.android.http.AsyncHttpResponseHandler;
 import com.loopj.android.http.JsonHttpResponseHandler;
 
+import cz.msebera.android.httpclient.Header;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -20,8 +22,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import cz.msebera.android.httpclient.Header;
 
 public class WebServiceClient {
 
@@ -173,28 +173,18 @@ public class WebServiceClient {
     public void getCountyOutlines(final Context context,
             final GeographicAreaResultsCommunicatorInterface resultsCommunicator,
             Map<String, String> params) {
+
         Log.i(TAG, "getCountyOutlines called");
         Log.i(TAG, "Params: " + params);
-        RequestParams requestParameters = new RequestParams(params);
+        final RequestParams requestParameters = new RequestParams(params);
         Log.i(TAG, "ResuestParameters: " + requestParameters);
-        WebServiceClient.get("counties", requestParameters, new JsonHttpResponseHandler() {
+        // Set up handler for the main request to get nova counties
+        final JsonHttpResponseHandler novaCountiesResponse = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                // Log.i(TAG, "JSONObject: " + response);
-                /*
-                Map<String, List<LatLng>> areaConvexHulls = new HashMap<String, List<LatLng>>();
-                Map<String, Map<String, String>> areaStatistics
-                        = new HashMap<String, Map<String, String>>();
                 try {
-                    Utils.areaResultsProcessor(areaConvexHulls, areaStatistics, response);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                resultsCommunicator.useResults(areaConvexHulls, areaStatistics);
-                */
-                try {
-                    mCache.insertCountyData(context, response);
+                    mCache.insertNovaCountyData(context, response);
                 } catch (JSONException e) {
                     e.printStackTrace();
                     Log.e(TAG, "JSONException IN onSuccess IN getCountyOutlines!");
@@ -210,7 +200,7 @@ public class WebServiceClient {
 
             @Override
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
-                Log.w(TAG, "Request failure in getSpectralClustering"
+                Log.w(TAG, "Request failure in getNovaCountyOutlines"
                         + "\nStatusCode: " + statusCode
                         + "\nHeaders: " + headers
                         + "\nMessage: " + message);
@@ -219,7 +209,46 @@ public class WebServiceClient {
             @Override
             public void onFailure(int statusCode, Header[] headers, Throwable throwable,
                                   JSONObject response) {
-                Log.w(TAG, "Request failure in getSpectralClustering"
+                Log.w(TAG, "Request failure in getNovaCountyOutlines"
+                        + "\nStatusCode: " + statusCode
+                        + "\nHeaders: " + headers
+                        + "\nMessage: " + response);
+            }
+        };
+
+        // Perform the checksum request, if the checksum doesn't match, pull new data
+        WebServiceClient.get("counties_checksum", null, new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                try {
+                    int serverNovaCountyChecksum = response.getInt("count");
+                    int clientNovaCountyChecksum = mCache.novaCountyRowsCheckSum(context);
+
+                    if (serverNovaCountyChecksum != clientNovaCountyChecksum) {
+                        Log.i(TAG, "Checksum mismatch! Retrieving nova county data from server!");
+                        mCache.wipeCountyRows(context);
+                        WebServiceClient.get("nova_counties", requestParameters, novaCountiesResponse);
+                    } else {
+                        Log.i(TAG, "Checksum match!!!! Retrieving nova county data from cache!");
+                        resultsCommunicator.useResults(null, null);
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
+                Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
+                        + "\nStatusCode: " + statusCode
+                        + "\nHeaders: " + headers
+                        + "\nMessage: " + message);
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, Throwable throwable,
+                                  JSONObject response) {
+                Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
                         + "\nStatusCode: " + statusCode
                         + "\nHeaders: " + headers
                         + "\nMessage: " + response);
