@@ -63,6 +63,8 @@ public class WebServiceClient {
         return jsonList;
     }
 
+    // End static fields/methods--------------------------------------------------------------------
+
     private Cache mCache;
 
     public WebServiceClient() {
@@ -73,52 +75,16 @@ public class WebServiceClient {
     }
 
     /**
-     * Get the number of crimes in DC.
-     */
-    public void getDCCount() {
-        WebServiceClient.get("dc-count", null, new JsonHttpResponseHandler() {
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
-                Log.i(TAG, "onSuccess with JSONObject");
-                Log.i(TAG, "JSONObject: " + response);
-
-                int dcCount = -1;
-                try {
-                    dcCount = response.getInt("count");
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                Log.i(TAG, "DC Count: " + dcCount);
-            }
-
-            @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
-                Log.i(TAG, "onSuccess with JSONArray");
-                Log.i(TAG, "JSONArray: " + response);
-            }
-
-            @Override
-            public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
-                Log.w(TAG, "Request failure in getDCCount");
-            }
-        });
-    }
-
-    /**
      * Get all crimes in DC.
      */
-    public void getDCCrimes(final RawDataCommunicatorInterface resultsCommunicator) {
-        WebServiceClient.get("dc-crime", null, new JsonHttpResponseHandler() {
+    public void getDCCrimes(final Context context, final RawDataCommunicatorInterface resultsCommunicator) {
+        final JsonHttpResponseHandler firstDcCrimesResponseHandler = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Log.i(TAG, "JSONObject: " + response);
                 try {
                     JSONArray dcCrimesRows = response.getJSONArray("dc_crimes");
-                    Log.i(TAG, "dcCrimesRows: " + dcCrimesRows);
-                    List<Map<String, String>> jsonList = jsonArrayToList(dcCrimesRows);
-                    resultsCommunicator.useResults(jsonList);
-                    Log.i(TAG, "jsonList: " + jsonList);
+                    mCache.insertDcCrimeData(context, dcCrimesRows);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -127,31 +93,54 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
                 Log.i(TAG, "onSuccess with JSONArray");
-                Log.i(TAG, "JSONArray: " + response);
             }
 
             @Override
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getDCCrimes");
             }
-        });
-    }
-
-    /**
-     * Get all crimes in DC.
-     */
-    public void getNovaCrimes(final RawDataCommunicatorInterface resultsCommunicator) {
-        WebServiceClient.get("nova-crime", null, new JsonHttpResponseHandler() {
+        };
+        final JsonHttpResponseHandler dcCrimesResponseHandler = new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Log.i(TAG, "JSONObject: " + response);
                 try {
-                    JSONArray dcCrimesRows = response.getJSONArray("nova_crimes");
-                    Log.i(TAG, "novaCrimesRows: " + dcCrimesRows);
-                    List<Map<String, String>> jsonList = jsonArrayToList(dcCrimesRows);
-                    resultsCommunicator.useResults(jsonList);
-                    Log.i(TAG, "jsonList: " + jsonList);
+                    JSONArray dcCrimesRows = response.getJSONArray("dc_crimes");
+                    mCache.insertDcCrimeData(context, dcCrimesRows);
+                    resultsCommunicator.useResults(null);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
+                Log.i(TAG, "onSuccess with JSONArray");
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
+                Log.w(TAG, "Request failure in getDCCrimes");
+            }
+        };
+
+        WebServiceClient.get("dc-crimes-checksum", null, new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                Log.i(TAG, "onSuccess with JSONObject");
+                try {
+                    int serverDCCrimeChecksum = response.getInt("count");
+                    int clientDCCrimeChecksum = mCache.dcCrimeRowsChecksum(context);
+
+                    if (serverDCCrimeChecksum != clientDCCrimeChecksum) {
+                        Log.i(TAG, "Checksum mismatch! Retrieving DC crime data from server!");
+                        mCache.wipeDcCrimeRows(context);
+                        WebServiceClient.get("dc-crime", null, firstDcCrimesResponseHandler);
+                        WebServiceClient.get("dc-crime-2", null, dcCrimesResponseHandler);
+                    } else {
+                        Log.i(TAG, "Checksum match!!!! Retrieving DC crime data from cache!");
+                        resultsCommunicator.useResults(null);
+                    }
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -165,7 +154,74 @@ public class WebServiceClient {
 
             @Override
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
+                Log.w(TAG, "Request failure in getDCCrimesChecksum");
+            }
+        });
+    }
+
+    /**
+     * Get all crimes in Nova.
+     */
+    public void getNovaCrimes(final Context context, final RawDataCommunicatorInterface resultsCommunicator) {
+        final JsonHttpResponseHandler novaCrimesResponseHandler = new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                Log.i(TAG, "onSuccess with JSONObject");
+                try {
+                    JSONArray novaCrimesRows = response.getJSONArray("nova_crimes");
+                    mCache.insertNovaCrimeData(context, novaCrimesRows);
+                    resultsCommunicator.useResults(null);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
+                Log.i(TAG, "onSuccess with JSONArray");
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getNovaCrimes");
+            }
+        };
+
+        WebServiceClient.get("nova-crimes-checksum", null, new JsonHttpResponseHandler() {
+            @Override
+            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+                try {
+                    int serverNovaCrimeChecksum = response.getInt("count");
+                    int clientNovaCrimeChecksum = mCache.novaCrimeRowsChecksum(context);
+
+                    if (serverNovaCrimeChecksum != clientNovaCrimeChecksum) {
+                        Log.i(TAG, "Checksum mismatch! Retrieving nova crime data from server!");
+                        mCache.wipeNovaCrimeRows(context);
+                        WebServiceClient.get("nova-crime", null, novaCrimesResponseHandler);
+                    } else {
+                        Log.i(TAG, "Checksum match!!!! Retrieving nova crime data from cache!");
+                        resultsCommunicator.useResults(null);
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
+                Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
+                        + "\nStatusCode: " + statusCode
+                        + "\nHeaders: " + headers
+                        + "\nMessage: " + message);
+            }
+
+            @Override
+            public void onFailure(int statusCode, Header[] headers, Throwable throwable,
+                                  JSONObject response) {
+                Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
+                        + "\nStatusCode: " + statusCode
+                        + "\nHeaders: " + headers
+                        + "\nMessage: " + response);
             }
         });
     }
@@ -195,7 +251,6 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
                 Log.i(TAG, "onSuccess with JSONArray");
-                Log.i(TAG, "JSONArray: " + response);
             }
 
             @Override
@@ -217,17 +272,17 @@ public class WebServiceClient {
         };
 
         // Perform the checksum request, if the checksum doesn't match, pull new data
-        WebServiceClient.get("counties_checksum", null, new JsonHttpResponseHandler() {
+        WebServiceClient.get("nova-counties-checksum", null, new JsonHttpResponseHandler() {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 try {
                     int serverNovaCountyChecksum = response.getInt("count");
-                    int clientNovaCountyChecksum = mCache.novaCountyRowsCheckSum(context);
+                    int clientNovaCountyChecksum = mCache.novaCountyRowsChecksum(context);
 
                     if (serverNovaCountyChecksum != clientNovaCountyChecksum) {
                         Log.i(TAG, "Checksum mismatch! Retrieving nova county data from server!");
                         mCache.wipeCountyRows(context);
-                        WebServiceClient.get("nova_counties", requestParameters, novaCountiesResponse);
+                        WebServiceClient.get("nova-counties", requestParameters, novaCountiesResponse);
                     } else {
                         Log.i(TAG, "Checksum match!!!! Retrieving nova county data from cache!");
                         resultsCommunicator.useResults(null, null);
@@ -269,7 +324,6 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Log.i(TAG, "JSONObject: " + response);
                 Map<String, List<LatLng>> clusterConvexHulls = new HashMap<String, List<LatLng>>();
                 Map<String, Map<String, String>> clusterStatistics
                         = new HashMap<String, Map<String, String>>();
@@ -284,7 +338,6 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
                 Log.i(TAG, "onSuccess with JSONArray");
-                Log.i(TAG, "JSONArray: " + response);
             }
 
             @Override
@@ -317,7 +370,6 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Log.i(TAG, "JSONObject: " + response);
                 Map<String, List<LatLng>> clusterConvexHulls = new HashMap<String, List<LatLng>>();
                 Map<String, Map<String, String>> clusterStatistics
                         = new HashMap<String, Map<String, String>>();
@@ -332,7 +384,6 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONArray response) {
                 Log.i(TAG, "onSuccess with JSONArray");
-                Log.i(TAG, "JSONArray: " + response);
             }
 
             @Override

@@ -29,6 +29,48 @@
             android:checked="true"/>
 
         <TextView
+            android:id="@+id/nova_county_selection_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Nova Counties to Select Crime From" />
+        <CheckBox
+            android:id="@+id/checkbox_county_alexandria"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Alexandria"/>
+        <CheckBox
+            android:id="@+id/checkbox_county_arlington"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Arlington"/>
+        <CheckBox
+            android:id="@+id/checkbox_county_fairfax"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Fairfax"/>
+        <CheckBox
+            android:id="@+id/checkbox_county_fairfax_city"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Fairfax City"/>
+        <CheckBox
+            android:id="@+id/checkbox_county_falls_church"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Falls Church" />
+        <CheckBox
+            android:id="@+id/checkbox_county_loudoun"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="Loudoun" />
+
+        <TextView
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:text="Clustering Algorithm Selection"/>
@@ -52,31 +94,24 @@
         </RadioGroup>
 
         <TextView
-            android:id="@+id/k_means_parameters_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="K-Means Parameter Selection" />
-        <TextView
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
-            android:text="Number of K-Means Clusters" />
+            android:text="Number of Clusters" />
         <SeekBar
-            android:id="@+id/seek_bar_k_means_clusters"
+            android:id="@+id/seek_bar_num_clusters"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content" />
 
-        <TextView
-            android:id="@+id/spectral_clustering_parameters_title"
-            android:layout_width="match_parent"
+        <Button
+            android:id="@+id/button_clear_cache"
+            android:layout_width="120dp"
             android:layout_height="wrap_content"
-            android:text="Spectral Clustering Parameter Selection" />
-        <TextView
-            android:layout_width="fill_parent"
+            android:text="Clear Cache"/>
+
+        <Button
+            android:id="@+id/button_reset_settings"
+            android:layout_width="120dp"
             android:layout_height="wrap_content"
-            android:text="Number of Spectral Clustering Clusters" />
-        <SeekBar
-            android:id="@+id/seek_bar_spectral_clustering_clusters"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content" />
+            android:text="Reset Settings"/>
         </LinearLayout>
 </ScrollView>

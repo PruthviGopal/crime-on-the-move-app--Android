@@ -1,6 +1,5 @@
 package com.edg.crimeonthemove;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -12,18 +11,16 @@ import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
-import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 
 public class DataSettingsFragment extends Fragment {
-
-    public interface OnFragmentInteractionListener {}
 
     private static final String TAG = "DataSettingsFragment";
 
@@ -35,22 +32,57 @@ public class DataSettingsFragment extends Fragment {
         return "Data Settings";
     }
 
-    private OnFragmentInteractionListener mListener;
+    /**
+     * Initializes all the default options.
+     *
+     * @param context used to access the SharedPreferences.
+     */
+    public static void initializeDefaultOptions(Context context) {
+        initializeDefaultOptions(context, false);
+    }
+
+    /**
+     * Initializes all the default options.
+     *
+     * @param context used to access the SharedPreferences.
+     * @param force if true all default options are set, overriding any existing options.
+     */
+    public static void initializeDefaultOptions(Context context, boolean force) {
+        SharedPreferences preferences = context.getSharedPreferences(Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = preferences.edit();
+        // Nova data selection
+        if (!preferences.contains(Constants.NOVA_DATA_OPTION) || force) {
+            editor.putBoolean(Constants.NOVA_DATA_OPTION, true);
+        }
+        // DC data selection
+        if (!preferences.contains(Constants.DC_DATA_OPTION) || force) {
+            editor.putBoolean(Constants.DC_DATA_OPTION, true);
+        }
+        // Nova county selections
+        for (String countyKey : Constants.COUNTY_CRIME_OPTIONS) {
+            if (!preferences.contains(countyKey) || force) {
+                editor.putBoolean(countyKey, true);
+            }
+        }
+
+        // Clustering type selection
+        if (!preferences.contains(Constants.CLUSTERING_SELECTION) || force) {
+            editor.putInt(Constants.CLUSTERING_SELECTION, Constants.K_MEANS_SELECTED);
+        }
+        // Num clusters selection
+        if (!preferences.contains(Constants.NUM_CLUSTERS_OPTION) || force) {
+            editor.putInt(Constants.NUM_CLUSTERS_OPTION, 4);
+        }
+        editor.apply();
+    }
+
+    private Cache mCache;
     private SharedPreferences mOptions;
-
-    // Options UI objects
-    private CheckBox mNovaData;
-    private CheckBox mDCData;
-
-    private RadioGroup mClusteringAlgorithm;
-
-    private SeekBar mKMeansClusters;
-    private SeekBar mSpectralClusters;
-
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        mCache = new Cache();
     }
 
     @Override
@@ -58,33 +90,48 @@ public class DataSettingsFragment extends Fragment {
             Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_data_settings, container, false);
 
-        mNovaData = (CheckBox) view.findViewById(R.id.checkbox_nova_data);
-        mNovaData.setChecked(mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false));
-        mNovaData.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                SharedPreferences.Editor editor = mOptions.edit();
-                editor.putBoolean(Constants.NOVA_DATA_OPTION, isChecked);
-                editor.apply();
-            }
-        });
-        mDCData = (CheckBox) view.findViewById(R.id.checkbox_dc_data);
-        mDCData.setChecked(mOptions.getBoolean(Constants.DC_DATA_OPTION, false));
-        mDCData.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                SharedPreferences.Editor editor = mOptions.edit();
-                editor.putBoolean(Constants.DC_DATA_OPTION, isChecked);
-                editor.apply();
-            }
-        });
+        // Nova checkbox
+        CheckBox mNovaData = (CheckBox) view.findViewById(R.id.checkbox_nova_data);
+        setupCheckBox(mNovaData, Constants.NOVA_DATA_OPTION);
 
-        mClusteringAlgorithm = (RadioGroup) view.findViewById(R.id.radio_group_clustering_algorithm_choice);
-        mClusteringAlgorithm.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+        // DC Checkbox
+        CheckBox mDCData = (CheckBox) view.findViewById(R.id.checkbox_dc_data);
+        setupCheckBox(mDCData, Constants.DC_DATA_OPTION);
+
+        // County selection checkboxes
+        CheckBox countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_alexandria);
+        setupCheckBox(countyCheckBox, Constants.ALEXANDRIA_COUNTY_CRIME_OPTION);
+        countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_arlington);
+        setupCheckBox(countyCheckBox, Constants.ARLINGTON_COUNTY_CRIME_OPTION);
+        countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_fairfax);
+        setupCheckBox(countyCheckBox, Constants.FAIRFAX_COUNTY_CRIME_OPTION);
+        countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_fairfax_city);
+        setupCheckBox(countyCheckBox, Constants.FAIRFAX_CITY_CRIME_OPTION);
+        countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_falls_church);
+        setupCheckBox(countyCheckBox, Constants.FALLS_CHURCH_COUNTY_CRIME_OPTION);
+        countyCheckBox = (CheckBox) view.findViewById(R.id.checkbox_county_loudoun);
+        setupCheckBox(countyCheckBox, Constants.LOUDOUN_COUNTY_CRIME_OPTION);
+
+        // Clustering algorithm selection
+        RadioGroup clusteringAlgorithmRadioGroup
+                = (RadioGroup) view.findViewById(R.id.radio_group_clustering_algorithm_choice);
+        // Ensure radio button selections match current settings
+        switch (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1)) {
+            case Constants.K_MEANS_SELECTED:
+                clusteringAlgorithmRadioGroup.findViewById(R.id.radio_button_k_means).setSelected(true);
+                break;
+            case Constants.SPECTRAL_CLUSTERING_SELECTED:
+                clusteringAlgorithmRadioGroup.findViewById(R.id.radio_button_spectral_clustering).setSelected(true);
+                break;
+            default:
+                Log.e(TAG, "PROBLEM in initializing clustering selection radio buttons, default case hit!");
+                break;
+        }
+        // Setup on select behavior
+        clusteringAlgorithmRadioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(RadioGroup group, int checkedId) {
                 SharedPreferences.Editor editor = mOptions.edit();
-                Log.i(TAG, "checkedId: " + checkedId);
                 switch (checkedId) {
                     case R.id.radio_button_k_means:
                         editor.putInt(Constants.CLUSTERING_SELECTION, Constants.K_MEANS_SELECTED);
@@ -100,15 +147,16 @@ public class DataSettingsFragment extends Fragment {
             }
         });
 
-        mKMeansClusters = (SeekBar) view.findViewById(R.id.seek_bar_k_means_clusters);
-        mKMeansClusters.setMax(Constants.MAX_CLUSTERS);
-        mKMeansClusters.setProgressDrawable(getSeekBarBackground(mKMeansClusters));
-        mKMeansClusters.setProgress(mOptions.getInt(Constants.K_MEANS_CLUSTERS_OPTION, -1));
-        mKMeansClusters.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+        // Set/get the number of clusters using a seek bar
+        SeekBar numClusters = (SeekBar) view.findViewById(R.id.seek_bar_num_clusters);
+        numClusters.setMax(Constants.MAX_CLUSTERS);
+        numClusters.setProgressDrawable(getSeekBarBackground(numClusters));
+        numClusters.setProgress(mOptions.getInt(Constants.NUM_CLUSTERS_OPTION, -1));
+        numClusters.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 SharedPreferences.Editor editor = mOptions.edit();
-                editor.putInt(Constants.K_MEANS_CLUSTERS_OPTION, progress);
+                editor.putInt(Constants.NUM_CLUSTERS_OPTION, progress);
                 editor.apply();
             }
 
@@ -120,33 +168,51 @@ public class DataSettingsFragment extends Fragment {
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
         });
-        mSpectralClusters = (SeekBar) view.findViewById(R.id.seek_bar_spectral_clustering_clusters);
-        mSpectralClusters.setMax(Constants.MAX_CLUSTERS);
-        mSpectralClusters.setProgressDrawable(getSeekBarBackground(mSpectralClusters));
-        mSpectralClusters.setProgress(mOptions.getInt(Constants.SPECTRAL_CLUSTERS_OPTION, -1));
-        mSpectralClusters.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+        // Clear the cache
+        Button clearCacheButton = (Button) view.findViewById(R.id.button_clear_cache);
+        clearCacheButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                SharedPreferences.Editor editor = mOptions.edit();
-                editor.putInt(Constants.SPECTRAL_CLUSTERS_OPTION, progress);
-                editor.apply();
+            public void onClick(View v) {
+                mCache.clearCache(getContext());
             }
+        });
 
+        // Reset the options
+        Button resetOptionsButton = (Button) view.findViewById(R.id.button_reset_settings);
+        resetOptionsButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onStartTrackingTouch(SeekBar seekBar) {}
-
-            @Override
-            public void onStopTrackingTouch(SeekBar seekBar) {}
+            public void onClick(View v) {
+                initializeDefaultOptions(getContext(), true);
+            }
         });
 
         return view;
     }
 
+    private void setupCheckBox(CheckBox checkBox, final String key) {
+        checkBox.setChecked(mOptions.getBoolean(key, false));
+        checkBox.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.putBoolean(key, isChecked);
+                editor.apply();
+            }
+        });
+    }
+
+    /**
+     * Set up the background for the passed in SeekBar.
+     *
+     * @param seekBar the SeekBar whose background is getting set, used for measurements.
+     * @return a Drawable to go in the background of seekBar.
+     */
     private Drawable getSeekBarBackground(SeekBar seekBar) {
         seekBar.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         int width = seekBar.getMeasuredWidth();
         int height = seekBar.getMeasuredHeight();
-        Log.i(TAG, "seekBar width: " + width + "  seekbar height: " + height);
+
         Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565);
         bitmap.eraseColor(Color.WHITE);
 
@@ -199,20 +265,13 @@ public class DataSettingsFragment extends Fragment {
     }
 
     @Override
-    public void onAttach(Activity activity) {
-        super.onAttach(activity);
-        try {
-            mListener = (OnFragmentInteractionListener) activity;
-        } catch (ClassCastException e) {
-            throw new ClassCastException(activity.toString()
-                    + " must implement OnFragmentInteractionListener");
-        }
-        mOptions = activity.getSharedPreferences(Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        mOptions = context.getSharedPreferences(Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
     }
 
     @Override
     public void onDetach() {
         super.onDetach();
-        mListener = null;
     }
 }

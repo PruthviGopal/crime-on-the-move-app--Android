@@ -55,20 +55,12 @@ public class Utils {
         try {
             JSONObject statisticsObject = response.getJSONObject("statistics");
             JSONObject jsonClusterStatistics;
-            Iterator<String> clusterStatisticsKeyIt;
             keyIt = statisticsObject.keys();
             while (keyIt.hasNext()) {
                 key = keyIt.next();
                 jsonClusterStatistics = statisticsObject.getJSONObject(key);
-                clusterStatisticsKeyIt = jsonClusterStatistics.keys();
                 Map<String, String> specificClusterStatistics = new HashMap<>();
-                String clusterStatisticsKey;
-                String clusterStatistic;
-                while (clusterStatisticsKeyIt.hasNext()) {
-                    clusterStatisticsKey = clusterStatisticsKeyIt.next();
-                    clusterStatistic = jsonClusterStatistics.getString(clusterStatisticsKey);
-                    specificClusterStatistics.put(clusterStatisticsKey, clusterStatistic);
-                }
+                parseStatistics(specificClusterStatistics, jsonClusterStatistics);
                 areaStatistics.put(key, specificClusterStatistics);
             }
         } catch (JSONException exception) {
@@ -96,6 +88,23 @@ public class Utils {
             double latitude = Double.parseDouble(jsonPoint.getString("y_cord"));
             double longitude = Double.parseDouble(jsonPoint.getString("x_cord"));
             areaBoundary.add(new LatLng(latitude, longitude));
+        }
+    }
+
+    /**
+     *
+     * @param statistics
+     * @param jsonStatistics
+     */
+    public static void parseStatistics(Map<String, String> statistics, JSONObject jsonStatistics)
+            throws JSONException {
+        Iterator<String> clusterStatisticsKeyIt = jsonStatistics.keys();
+        String clusterStatisticsKey;
+        String clusterStatistic;
+        while (clusterStatisticsKeyIt.hasNext()) {
+            clusterStatisticsKey = clusterStatisticsKeyIt.next();
+            clusterStatistic = jsonStatistics.getString(clusterStatisticsKey);
+            statistics.put(clusterStatisticsKey, clusterStatistic);
         }
     }
 }

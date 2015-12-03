@@ -1,7 +1,5 @@
 package com.edg.crimeonthemove;
 
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
@@ -26,8 +24,7 @@ import java.util.Map;
 
 
 public class MainActivity extends FragmentActivity
-        implements CrimeMapFragment.OnFragmentInteractionListener,
-        DataSettingsFragment.OnFragmentInteractionListener {
+        implements CrimeMapFragment.OnFragmentInteractionListener {
 
     private static final String TAG = "MainActivity";
 
@@ -69,11 +66,12 @@ public class MainActivity extends FragmentActivity
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.i(TAG, "onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         // Initialize state variables
-        initializeDefaultOptions();
+        DataSettingsFragment.initializeDefaultOptions(this);
         mCurrentFragmentIndex = CRIME_MAP_FRAGMENT_INDEX;
         if (savedInstanceState != null) {
             mCurrentFragmentIndex = savedInstanceState.getInt(CURRENT_FRAGMENT_INDEX_KEY);
@@ -81,7 +79,7 @@ public class MainActivity extends FragmentActivity
 
         // Navigation Drawer setup
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mFragments = new ArrayList<FragmentInfo>(4);
+        mFragments = new ArrayList<>(4);
         mFragments.add(new FragmentInfo(CrimeMapFragment.getFragmentTitle()) {
             @Override
             public Fragment getInstance() {
@@ -96,9 +94,11 @@ public class MainActivity extends FragmentActivity
             }
         });
 
-        // Set up UI elements
-        setupNavDrawer();
-        initFragment(mCurrentFragmentIndex);
+        if (savedInstanceState == null) {
+            // Set up UI elements for first run
+            setupNavDrawer();
+            initFragment(mCurrentFragmentIndex);
+        }
 
         // Create web service client
         mWebServiceClient = new WebServiceClient();
@@ -113,10 +113,10 @@ public class MainActivity extends FragmentActivity
         mDrawerList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                mCurrentFragmentIndex = position;
                 mDrawerList.setItemChecked(position, true);
                 mDrawerLayout.closeDrawers();
                 initFragment(position);
-                mCurrentFragmentIndex = position;
             }
         });
         mDrawerToggle = new ActionBarDrawerToggle(this, mDrawerLayout,
@@ -126,14 +126,18 @@ public class MainActivity extends FragmentActivity
             /** Called when a drawer has settled in a completely closed state. */
             public void onDrawerClosed(View view) {
                 super.onDrawerClosed(view);
-                getActionBar().setTitle(mTitle);
+                if (getActionBar() != null) {
+                    getActionBar().setTitle(mTitle);
+                }
                 invalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
             }
 
             /** Called when a drawer has settled in a completely open state. */
             public void onDrawerOpened(View drawerView) {
                 super.onDrawerOpened(drawerView);
-                getActionBar().setTitle(mTitle);
+                if (getActionBar() != null) {
+                    getActionBar().setTitle(mTitle);
+                }
                 invalidateOptionsMenu(); // creates call to onPrepareOptionsMenu()
             }
         };
@@ -143,8 +147,10 @@ public class MainActivity extends FragmentActivity
      * Handles fragment transactions for fragments in the Navigation Drawer.
      */
     private void initFragment(int fragmentIndex) {
+        Log.i(TAG, "initFragment: " + fragmentIndex);
         FragmentInfo fragmentInfo = mFragments.get(fragmentIndex);
-        FragmentManager fragmentManager = getSupportFragmentManager();
+        final FragmentManager fragmentManager = getSupportFragmentManager();
+        // TODO: Back stack problem with main fragment....
         if (fragmentManager.getBackStackEntryCount() > 1) {
             fragmentManager.beginTransaction()
                     .replace(R.id.container, fragmentInfo.getInstance(), fragmentInfo.getTag())
@@ -154,34 +160,28 @@ public class MainActivity extends FragmentActivity
                     .replace(R.id.container, fragmentInfo.getInstance(), fragmentInfo.getTag())
                     .addToBackStack(fragmentInfo.getTag())
                     .commit();
+            fragmentManager.addOnBackStackChangedListener(new FragmentManager.OnBackStackChangedListener() {
+                @Override
+                public void onBackStackChanged() {
+                    mCurrentFragmentIndex = CRIME_MAP_FRAGMENT_INDEX;
+                    fragmentManager.removeOnBackStackChangedListener(this);
+                }
+            });
         }
         mTitle = fragmentInfo.getTag();
     }
 
-    private void initializeDefaultOptions() {
-        SharedPreferences preferences = getSharedPreferences(Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
-        SharedPreferences.Editor editor = preferences.edit();
-        if (preferences.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
-            editor.putBoolean(Constants.NOVA_DATA_OPTION, true);
-        }
-        if (preferences.getBoolean(Constants.DC_DATA_OPTION, false)) {
-            editor.putBoolean(Constants.DC_DATA_OPTION, true);
-        }
-        if (preferences.getInt(Constants.CLUSTERING_SELECTION, -1) == -1) {
-            editor.putInt(Constants.CLUSTERING_SELECTION, Constants.K_MEANS_SELECTED);
-        }
-        if (preferences.getInt(Constants.K_MEANS_CLUSTERS_OPTION, -1) == -1) {
-            editor.putInt(Constants.K_MEANS_CLUSTERS_OPTION, 4);
-        }
-        if (preferences.getInt(Constants.SPECTRAL_CLUSTERS_OPTION, -1) == -1) {
-            editor.putInt(Constants.SPECTRAL_CLUSTERS_OPTION, 4);
-        }
-        editor.apply();
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        Log.i(TAG, "onSaveInstanceState");
+        super.onSaveInstanceState(outState);
+        outState.putInt(CURRENT_FRAGMENT_INDEX_KEY, mCurrentFragmentIndex);
     }
 
     @Override
-    public void onSaveInstanceState(Bundle outState) {
-        outState.putInt(CURRENT_FRAGMENT_INDEX_KEY, mCurrentFragmentIndex);
+    public void onDestroy() {
+        Log.i(TAG, "onDestroy");
+        super.onDestroy();
     }
 
     @Override
@@ -196,7 +196,7 @@ public class MainActivity extends FragmentActivity
 
     @Override
     public void getDCCrimeData() {
-        mWebServiceClient.getDCCrimes(new WebServiceClient.RawDataCommunicatorInterface() {
+        mWebServiceClient.getDCCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
             @Override
             public void useResults(List<Map<String, String>> jsonList) {
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
@@ -204,7 +204,8 @@ public class MainActivity extends FragmentActivity
                     FragmentManager fragmentManager = getSupportFragmentManager();
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
-                    crimeMapFragment.addCrimes(jsonList);
+                    // crimeMapFragment.addNovaCrimes(jsonList);
+                    crimeMapFragment.addDcCrimes();
                 }
             }
         });
@@ -212,7 +213,7 @@ public class MainActivity extends FragmentActivity
 
     @Override
     public void getNovaCrimeData() {
-        mWebServiceClient.getNovaCrimes(new WebServiceClient.RawDataCommunicatorInterface() {
+        mWebServiceClient.getNovaCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
             @Override
             public void useResults(List<Map<String, String>> jsonList) {
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
@@ -220,10 +221,47 @@ public class MainActivity extends FragmentActivity
                     FragmentManager fragmentManager = getSupportFragmentManager();
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
-                    crimeMapFragment.addCrimes(jsonList);
+                    // crimeMapFragment.addNovaCrimes(jsonList);
+                    crimeMapFragment.addNovaCrimes(null);
                 }
             }
         });
+    }
+
+    @Override
+    public void getCountyCrime(final String[] counties) {
+        mWebServiceClient.getNovaCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
+            @Override
+            public void useResults(List<Map<String, String>> jsonList) {
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    Log.i(TAG, "passing counties in county crimes to CrimeMapFragment");
+                    crimeMapFragment.addNovaCrimes(counties);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void getCountyOverlays(Map<String, String> params) {
+        mWebServiceClient.getCountyOutlines(this, new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
+            @Override
+            public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
+                                   Map<String, Map<String, String>> areaStatistics) {
+                Log.i(TAG, "getCOuntyOverlays: useResults\nmCurrentFragmentIndex: " + mCurrentFragmentIndex);
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    Log.i(TAG, "addCountyOverlay being called...");
+                    crimeMapFragment.addCountyOverlay();
+                }
+            }
+        }, params);
     }
 
     @Override
@@ -231,7 +269,7 @@ public class MainActivity extends FragmentActivity
         mWebServiceClient.getKMeans(new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
             @Override
             public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
-                    Map<String, Map<String, String>> areaStatistics) {
+                                   Map<String, Map<String, String>> areaStatistics) {
                 Log.v(TAG, "getKMeansClusteringData.useResults()");
                 FragmentInfo fragmentInfo = mFragments.get(CRIME_MAP_FRAGMENT_INDEX);//mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
@@ -249,7 +287,7 @@ public class MainActivity extends FragmentActivity
         mWebServiceClient.getSpectralClustering(new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
             @Override
             public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
-                    Map<String, Map<String, String>> areaStatistics) {
+                                   Map<String, Map<String, String>> areaStatistics) {
                 Log.v(TAG, "getSpectralClusteringData.useResults()");
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
@@ -257,23 +295,6 @@ public class MainActivity extends FragmentActivity
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
                     crimeMapFragment.addAreaOverlay(jsonMapOfLists, areaStatistics);
-                }
-            }
-        }, params);
-    }
-
-    @Override
-    public void getCountyOverlays(Map<String, String> params) {
-        mWebServiceClient.getCountyOutlines(this, new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
-            @Override
-            public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
-                    Map<String, Map<String, String>> areaStatistics) {
-                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
-                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
-                    FragmentManager fragmentManager = getSupportFragmentManager();
-                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
-                            .findFragmentByTag(fragmentInfo.getTag());
-                    crimeMapFragment.addCountyOverlay(null, null);
                 }
             }
         }, params);
