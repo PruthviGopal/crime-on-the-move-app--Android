@@ -40,6 +40,8 @@ public class Constants {
 
     public static final String NUM_CLUSTERS_OPTION = "NumClustersOption";
 
+    public static final String CLUSTER_MARKERS_OPTION = "ClusterMarkersOption";
+
     public static final String CLUSTERING_SELECTION = "ClusteringVarietySelection";
     public static final int K_MEANS_SELECTED = 0;
     public static final int SPECTRAL_CLUSTERING_SELECTED = 1;

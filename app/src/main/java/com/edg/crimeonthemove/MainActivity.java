@@ -1,6 +1,8 @@
 package com.edg.crimeonthemove;
 
+import android.content.Intent;
 import android.os.Bundle;
+import android.os.Parcel;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
@@ -94,9 +96,9 @@ public class MainActivity extends FragmentActivity
             }
         });
 
+        // Set up UI elements
+        setupNavDrawer();
         if (savedInstanceState == null) {
-            // Set up UI elements for first run
-            setupNavDrawer();
             initFragment(mCurrentFragmentIndex);
         }
 
@@ -221,7 +223,6 @@ public class MainActivity extends FragmentActivity
                     FragmentManager fragmentManager = getSupportFragmentManager();
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
-                    // crimeMapFragment.addNovaCrimes(jsonList);
                     crimeMapFragment.addNovaCrimes(null);
                 }
             }

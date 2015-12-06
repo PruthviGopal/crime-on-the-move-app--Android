@@ -2,6 +2,13 @@ package com.edg.crimeonthemove;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ShapeDrawable;
+import android.graphics.drawable.shapes.OvalShape;
+import android.graphics.drawable.shapes.Shape;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -14,27 +21,27 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.MapView;
 import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.PolygonOptions;
+import com.google.maps.android.clustering.ClusterItem;
+import com.google.maps.android.clustering.ClusterManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -93,6 +100,20 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         return "Crime Map";
     }
 
+    public static class MarkerClusterItem implements ClusterItem {
+
+        private final LatLng mPosition;
+
+        public MarkerClusterItem(LatLng position) {
+            mPosition = position;
+        }
+
+        @Override
+        public LatLng getPosition() {
+            return mPosition;
+        }
+    }
+
     /**
      * Class which wraps an overlay containing:
      *  a Polygon on the GoogleMap
@@ -108,17 +129,19 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         public final String name;
         public int color;
         public Polygon polygon;
+        public Marker marker;
         public final List<LatLng> polygonPoints;
         public List<List<LatLng>> holes;
         public final Map<String, String> statistics;
 
         private boolean isHighlighted;
 
-        public OverlayWrapper(String name, int color, Polygon polygon, Map<String, String> statistics) {
+        public OverlayWrapper(String name, int color, Polygon polygon, Marker marker, Map<String, String> statistics) {
             this.name = name;
             this.color = color;
             isHighlighted = false;
             this.polygon = polygon;
+            this.marker = marker;
             this.polygonPoints = Collections.unmodifiableList(polygon.getPoints());
             this.statistics = statistics;
             holes = new ArrayList<>(1);
@@ -224,6 +247,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     private OnFragmentInteractionListener mListener;
     private MapView mMapView;
     private GoogleMap mGoogleMap;
+    private ClusterManager<MarkerClusterItem> mClusterManager;
     private ArrayList<OverlayWrapper> mAreaOverlays;
     private int mSelectedOverlayIndex;
     private ArrayList<Marker> mMarkers;
@@ -307,7 +331,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     params.put(Constants.BACK_END_NOVA_DATA_PARAM, new JSONArray(counties).toString());
                 }
                 // DC
-                if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
+                if (mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
                     params.put(Constants.BACK_END_DC_DATA_PARAM, Constants.BACK_END_DC_DATA_PARAM);
                 }
 
@@ -370,11 +394,19 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mGoogleMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
             @Override
             public void onMapClick(LatLng clickPoint) {
-                int selectedOverlay = getSelectedOverlay(clickPoint);
-                if (selectedOverlay != -1) {
+                int selectedOverlayIndex = getSelectedOverlay(clickPoint);
+                if (selectedOverlayIndex != -1) {
                     // Do stuff with info box
+                    OverlayWrapper selectedOverlay = mAreaOverlays.get(selectedOverlayIndex);
                     Log.i(TAG, "SingleClick: Selecting overlay with name: "
-                            + mAreaOverlays.get(selectedOverlay).name);
+                            + selectedOverlay.name);
+                    // Hide info window if already shown
+                    if (selectedOverlay.marker.isInfoWindowShown()) {
+                        mAreaOverlays.get(selectedOverlayIndex).marker.hideInfoWindow();
+                        // Show info window if not shown
+                    } else {
+                        mAreaOverlays.get(selectedOverlayIndex).marker.showInfoWindow();
+                    }
                 }
             }
         });
@@ -398,6 +430,43 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 }
             }
         });
+        // Custom InfoWindow
+        mGoogleMap.setInfoWindowAdapter(new GoogleMap.InfoWindowAdapter() {
+            @Override
+            public View getInfoWindow(Marker marker) {
+                return null;
+            }
+
+            @Override
+            public View getInfoContents(Marker marker) {
+                LayoutInflater layoutInflater = LayoutInflater.from(getContext());
+                View view = layoutInflater.inflate(R.layout.info_window_view, null);
+                LinearLayout linearLayout = (LinearLayout) view.findViewById(R.id.linear_layout_top);
+
+                String snippet = marker.getSnippet();
+                String[] topFiveCrimes = snippet.replace("[", "").replace("]", "").replace("\"", "").split(",");
+                TextView textView;
+                String crime;
+                textView = new TextView(getContext());
+                textView.setText("Top 5 Crimes:");
+                textView.setTextSize(25);
+                linearLayout.addView(textView);
+                for (int i = 0; i < topFiveCrimes.length; i++) {
+                    crime = (i + 1) + ": ";
+                    crime += topFiveCrimes[i];
+                    textView = new TextView(getContext());
+                    textView.setText(crime);
+                    linearLayout.addView(textView);
+                }
+                return view;
+            }
+        });
+        // Enable/disable clustering on markers
+        if (mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
+            mClusterManager = new ClusterManager<>(getContext(), mGoogleMap);
+            mGoogleMap.setOnCameraChangeListener(mClusterManager);
+            // mGoogleMap.setOnMarkerClickListener(mClusterManager);
+        }
     }
 
     /**
@@ -561,13 +630,20 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             @Override
             public void useData(final double latitude, final double longitude, final String address) {
                 final LatLng latLng = new LatLng(latitude, longitude);
+                if (latitude == 0.0) {
+                    Log.i(TAG, "terrible LatLng: " + latLng);
+                }
                 mMainThreadHandler.post(new Runnable() {
                     @Override
                     public void run() {
-                        Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                .title(address)
-                                .position(latLng));
-                        mMarkers.add(marker);
+                        if (!mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
+                            Marker marker = mGoogleMap.addMarker(new MarkerOptions()
+                                    .title(latLng.toString()) // .title(address)
+                                    .position(latLng));
+                            mMarkers.add(marker);
+                        } else {
+                            mClusterManager.addItem(new MarkerClusterItem(latLng));
+                        }
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
                             if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
@@ -587,7 +663,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
-                Toast.makeText(getContext(), "Done placing crime markers!!!", Toast.LENGTH_SHORT).show();
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Done placing crime markers!!!", Toast.LENGTH_SHORT).show();
+                }
                 Log.i(TAG, "FINISHED PLACING NOVA CRIME MARKERS!");
             }
         });
@@ -646,7 +724,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mGoogleMap.clear();
 
         //Polygon polygon;
-        Marker marker;
+        Marker marker = null;
         Map<String, String> specificAreaStatistics;
         String statisticsString;
         Polygon polygon;
@@ -679,19 +757,74 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     statisticsString += specificAreaStatistics.get(statisticsKey);
                     statisticsString += "\n";
                 }
+                LatLng centerPoint = findCenter(areaBoundaries.get(key));
                 marker = mGoogleMap.addMarker(new MarkerOptions()
-                        .position(areaBoundaries.get(key).get(0))
+                        .position(centerPoint)
+                        .icon(getCircleMarkerIcon())
+                        .alpha(0)
                         .title("Cluster " + key)
                         .snippet(statisticsString));
-                marker.showInfoWindow();
             }
             if (areaStatistics.get(key) != null) {
-                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, areaStatistics.get(key)));
+                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, marker,
+                        areaStatistics.get(key)));
             } else {
-                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, null));
+                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, null, null));
             }
         }
     }
+
+    /**
+     * Sets up a BitmapDescriptor in the shape of a circle.
+     * The size is set to 5.
+     *
+     * @return BitmapDescriptor with the circle drawn in it.
+     */
+    private BitmapDescriptor getCircleMarkerIcon() {
+
+        ShapeDrawable shapeDrawable = new ShapeDrawable(new OvalShape());
+        shapeDrawable.setIntrinsicHeight(5);
+        shapeDrawable.setIntrinsicWidth(5);
+        Bitmap bitmap = Bitmap.createBitmap(shapeDrawable.getIntrinsicWidth(),
+                shapeDrawable.getIntrinsicHeight(),
+                Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        shapeDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+    /**
+     * Finds the center point of the bounding box around the polygon defined by polygonPoints.
+     * Returns the center point as a LatLng object.
+     *
+     * @param polygonPoints the List of LatLng objects defining the polygon whose center is to be found.
+     * @return the center point as a LatLng object.
+     */
+    private LatLng findCenter(List<LatLng> polygonPoints) {
+        // Find min/max points of bounding box for polygons
+        double minX = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
+        LatLng latLng;
+        for (int i = 0; i < polygonPoints.size(); i++) {
+            latLng = polygonPoints.get(i);
+            // Y
+            if (latLng.latitude < minY) {
+                minY = latLng.latitude;
+            } else if (latLng.latitude > maxY) {
+                maxY = latLng.latitude;
+            }
+            // X
+            if (latLng.longitude < minX) {
+                minX = latLng.longitude;
+            } else if (latLng.longitude > maxX) {
+                maxX = latLng.longitude;
+            }
+        }
+        return new LatLng(minY + (maxY - minY) / 2, minX + (maxX - minX) / 2);
+    }
+
 
     public void addCountyOverlay() {
         // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
@@ -709,7 +842,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     final Map<String, String> countyStatistics) {
                 // Take hash code and mod by color length, this should produce random enough color
                 // dispersion to be visually appealing.
-                final int colorKey = ((Math.abs(countyName.hashCode()) % colors.length) * 57 + 13) % colors.length;
+                final int colorKey = ((Math.abs(countyName.hashCode()) % colors.length) * 57 + 17) % colors.length;
                 // Run UI rendering on the main thread
                 mMainThreadHandler.post(new Runnable() {
                     @Override
@@ -719,8 +852,20 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                                 .fillColor(colors[colorKey])
                                 .strokeColor(colors[colorKey])
                                 .zIndex(20));
+                        LatLng centerPoint = findCenter(countyOutline);
+                        String statisticsString = "";
+                        for (String statisticsKey : countyStatistics.keySet()) {
+                            statisticsString += countyStatistics.get(statisticsKey);
+                            statisticsString += "\n";
+                        }
+                        Marker marker = mGoogleMap.addMarker(new MarkerOptions()
+                                .position(centerPoint)
+                                .icon(getCircleMarkerIcon())
+                                .alpha(0)
+                                .title(countyName)
+                                .snippet(statisticsString));
                         mAreaOverlays.add(new OverlayWrapper(countyName, colors[colorKey],
-                                polygon, countyStatistics));
+                                polygon, marker, countyStatistics));
                     }
                 });
             }

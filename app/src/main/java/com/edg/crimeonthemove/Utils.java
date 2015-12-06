@@ -92,9 +92,10 @@ public class Utils {
     }
 
     /**
+     * Parse a JSONObject containing statistics and place them into the passed in statistics Map.
      *
-     * @param statistics
-     * @param jsonStatistics
+     * @param statistics the Map to place the parsed statistics into. Keyed by statistic name.
+     * @param jsonStatistics the JSONObject to parse statistics out of.
      */
     public static void parseStatistics(Map<String, String> statistics, JSONObject jsonStatistics)
             throws JSONException {
@@ -106,5 +107,20 @@ public class Utils {
             clusterStatistic = jsonStatistics.getString(clusterStatisticsKey);
             statistics.put(clusterStatisticsKey, clusterStatistic);
         }
+    }
+
+    public static List<Map<String, String>> jsonArrayToList(JSONArray jsonArray) throws JSONException {
+        List<Map<String, String>> jsonList = new ArrayList<>(jsonArray.length());
+        for (int i = 0; i < jsonArray.length(); i++) {
+            Map<String, String> jsonMap = new HashMap<>();
+            JSONObject jsonObject = jsonArray.getJSONObject(i);
+            Iterator<String> jsonIt = jsonObject.keys();
+            while (jsonIt.hasNext()) {
+                String key = jsonIt.next();
+                jsonMap.put(key, jsonObject.getString(key));
+            }
+            jsonList.add(jsonMap);
+        }
+        return jsonList;
     }
 }

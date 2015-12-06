@@ -1,6 +1,9 @@
 package com.edg.crimeonthemove;
 
 import android.content.Context;
+import android.os.AsyncTask;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -17,9 +20,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -48,30 +50,17 @@ public class WebServiceClient {
         client.get(getAbsoluteUrl(url), params, responseHandler);
     }
 
-    public static List<Map<String, String>> jsonArrayToList(JSONArray jsonArray) throws JSONException {
-        List<Map<String, String>> jsonList = new ArrayList<Map<String, String>>(jsonArray.length());
-        for (int i = 0; i < jsonArray.length(); i++) {
-            Map<String, String> jsonMap = new HashMap<String, String>();
-            JSONObject jsonObject = jsonArray.getJSONObject(i);
-            Iterator<String> jsonIt = jsonObject.keys();
-            while (jsonIt.hasNext()) {
-                String key = jsonIt.next();
-                jsonMap.put(key, jsonObject.getString(key));
-            }
-            jsonList.add(jsonMap);
-        }
-        return jsonList;
-    }
-
     // End static fields/methods--------------------------------------------------------------------
 
     private Cache mCache;
+    private Handler mMainHandler;
 
     public WebServiceClient() {
         int waitTime = 1000 * 800;
         client.setConnectTimeout(waitTime);
         client.setResponseTimeout(waitTime);
         mCache = new Cache();
+        mMainHandler = new Handler(Looper.getMainLooper());
     }
 
     /**
@@ -165,15 +154,28 @@ public class WebServiceClient {
     public void getNovaCrimes(final Context context, final RawDataCommunicatorInterface resultsCommunicator) {
         final JsonHttpResponseHandler novaCrimesResponseHandler = new JsonHttpResponseHandler() {
             @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+            public void onSuccess(int statusCode, Header[] headers, final JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                try {
-                    JSONArray novaCrimesRows = response.getJSONArray("nova_crimes");
-                    mCache.insertNovaCrimeData(context, novaCrimesRows);
-                    resultsCommunicator.useResults(null);
-                } catch (JSONException e) {
-                    e.printStackTrace();
+                class InsertNovaCrimeData extends AsyncTask<JSONObject, Integer, Long> {
+                    @Override
+                    protected Long doInBackground(JSONObject... params) {
+                        try {
+                            JSONArray novaCrimesRows = response.getJSONArray("nova_crimes");
+                            mCache.insertNovaCrimeData(context, novaCrimesRows);
+                            mMainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    resultsCommunicator.useResults(null);
+                                }
+                            });
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                            Log.e(TAG, "error in async task in getNovaCrime cache insertion.");
+                        }
+                        return 1L;
+                    }
                 }
+                new InsertNovaCrimeData().execute();
             }
 
             @Override
@@ -211,7 +213,7 @@ public class WebServiceClient {
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
             }
 
@@ -220,7 +222,7 @@ public class WebServiceClient {
                                   JSONObject response) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);
             }
         });
@@ -257,7 +259,7 @@ public class WebServiceClient {
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
             }
 
@@ -266,7 +268,7 @@ public class WebServiceClient {
                                   JSONObject response) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);
             }
         };
@@ -296,7 +298,7 @@ public class WebServiceClient {
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
             }
 
@@ -305,7 +307,7 @@ public class WebServiceClient {
                                   JSONObject response) {
                 Log.w(TAG, "Request failure in getNovaCountyOutlines--checksum"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);
             }
         });
@@ -324,9 +326,8 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Map<String, List<LatLng>> clusterConvexHulls = new HashMap<String, List<LatLng>>();
-                Map<String, Map<String, String>> clusterStatistics
-                        = new HashMap<String, Map<String, String>>();
+                Map<String, List<LatLng>> clusterConvexHulls = new HashMap<>();
+                Map<String, Map<String, String>> clusterStatistics = new HashMap<>();
                 try {
                     Utils.areaResultsProcessor(clusterConvexHulls, clusterStatistics, response);
                 } catch (JSONException e) {
@@ -344,7 +345,7 @@ public class WebServiceClient {
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getSpectralClustering"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
             }
 
@@ -353,7 +354,7 @@ public class WebServiceClient {
                                   JSONObject response) {
                 Log.w(TAG, "Request failure in getSpectralClustering"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);
             }
         });
@@ -370,9 +371,8 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Map<String, List<LatLng>> clusterConvexHulls = new HashMap<String, List<LatLng>>();
-                Map<String, Map<String, String>> clusterStatistics
-                        = new HashMap<String, Map<String, String>>();
+                Map<String, List<LatLng>> clusterConvexHulls = new HashMap<>();
+                Map<String, Map<String, String>> clusterStatistics = new HashMap<>();
                 try {
                     Utils.areaResultsProcessor(clusterConvexHulls, clusterStatistics, response);
                 } catch (JSONException e) {
@@ -390,7 +390,7 @@ public class WebServiceClient {
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
                 Log.w(TAG, "Request failure in getSpectralClustering"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
             }
 
@@ -399,7 +399,7 @@ public class WebServiceClient {
                     JSONObject response) {
                 Log.w(TAG, "Request failure in getSpectralClustering"
                         + "\nStatusCode: " + statusCode
-                        + "\nHeaders: " + headers
+                        + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);
             }
         });
@@ -409,13 +409,6 @@ public class WebServiceClient {
      * Get all crime in a particular DC ward.
      */
     public void getWard() {
-        return;
-    }
-
-    /**
-     * Get all crime in a particular county.
-     */
-    public void getCounty() {
         return;
     }
 

@@ -17,6 +17,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.CompoundButton;
+import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 
@@ -73,6 +74,12 @@ public class DataSettingsFragment extends Fragment {
         if (!preferences.contains(Constants.NUM_CLUSTERS_OPTION) || force) {
             editor.putInt(Constants.NUM_CLUSTERS_OPTION, 4);
         }
+
+        // Cluster Markers Option
+        if (!preferences.contains(Constants.CLUSTER_MARKERS_OPTION) || force) {
+            editor.putBoolean(Constants.CLUSTER_MARKERS_OPTION, true);
+        }
+
         editor.apply();
     }
 
@@ -88,6 +95,7 @@ public class DataSettingsFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
             Bundle savedInstanceState) {
+        Log.i(TAG, "onCreateView");
         View view = inflater.inflate(R.layout.fragment_data_settings, container, false);
 
         // Nova checkbox
@@ -116,12 +124,17 @@ public class DataSettingsFragment extends Fragment {
         RadioGroup clusteringAlgorithmRadioGroup
                 = (RadioGroup) view.findViewById(R.id.radio_group_clustering_algorithm_choice);
         // Ensure radio button selections match current settings
+        RadioButton radioButton;
         switch (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1)) {
             case Constants.K_MEANS_SELECTED:
-                clusteringAlgorithmRadioGroup.findViewById(R.id.radio_button_k_means).setSelected(true);
+                radioButton = (RadioButton) clusteringAlgorithmRadioGroup
+                        .findViewById(R.id.radio_button_k_means);
+                radioButton.setChecked(true);
                 break;
             case Constants.SPECTRAL_CLUSTERING_SELECTED:
-                clusteringAlgorithmRadioGroup.findViewById(R.id.radio_button_spectral_clustering).setSelected(true);
+                radioButton = (RadioButton) clusteringAlgorithmRadioGroup
+                        .findViewById(R.id.radio_button_spectral_clustering);
+                radioButton.setChecked(true);
                 break;
             default:
                 Log.e(TAG, "PROBLEM in initializing clustering selection radio buttons, default case hit!");
@@ -168,6 +181,9 @@ public class DataSettingsFragment extends Fragment {
             public void onStopTrackingTouch(SeekBar seekBar) {
             }
         });
+
+        CheckBox markerClusteringCheckBox = (CheckBox) view.findViewById(R.id.checkbox_marker_clustering);
+        setupCheckBox(markerClusteringCheckBox, Constants.CLUSTER_MARKERS_OPTION);
 
         // Clear the cache
         Button clearCacheButton = (Button) view.findViewById(R.id.button_clear_cache);

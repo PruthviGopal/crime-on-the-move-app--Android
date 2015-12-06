@@ -5,6 +5,8 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
@@ -28,6 +30,10 @@ import java.util.Map;
 public class Cache {
 
     private static final String TAG = "Cache";
+
+    // TODO: Use a separate thread for caching operations
+    private Handler mHandler;
+    private HandlerThread mHandlerThread;
 
     /**
      * A class which defines a framework by which any query can be executed generically.
@@ -205,9 +211,17 @@ public class Cache {
                         break;
                     case "x_cord":
                         contentValues.put(NOVA_CRIME_X_CORD, novaCrime.getDouble(key));
+                        if (-1 < novaCrime.getDouble(key) && novaCrime.getDouble(key) < 5) {
+                            Log.e(TAG, "insertNovaCrimeData: x_cord problem lies here.");
+                            Log.e(TAG, "JSON: " + novaCrime.toString());
+                        }
                         break;
                     case "y_cord":
                         contentValues.put(NOVA_CRIME_Y_CORD, novaCrime.getDouble(key));
+                        if (-1 < novaCrime.getDouble(key) && novaCrime.getDouble(key) < 5) {
+                            Log.e(TAG, "insertNovaCrimeData: y_cord problem lies here.");
+                            Log.e(TAG, "JSON: " + novaCrime.toString());
+                        }
                         break;
                     case "address":
                         contentValues.put(NOVA_CRIME_ADDRESS, novaCrime.getString(key));
