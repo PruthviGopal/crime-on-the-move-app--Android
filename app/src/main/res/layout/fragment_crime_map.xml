@@ -21,11 +21,13 @@
         android:layout_height="60dp"
         android:orientation="horizontal">
 
+        <!--
         <Button
             android:id="@+id/button_get_crime_data"
             android:layout_width="100dp"
             android:layout_height="fill_parent"
             android:text="Update Data"/>
+        -->
 
         <Button
             android:id="@+id/button_get_selected_overlay_data"

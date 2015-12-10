@@ -287,16 +287,28 @@ public class WebServiceClient {
         final RequestParams requestParams = new RequestParams(params);
         WebServiceClient.get("crimes-in-outlines", requestParams, new JsonHttpResponseHandler() {
             @Override
-            public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
+            public void onSuccess(int statusCode, Header[] headers, final JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                try {
-                    JSONObject areasCrimesRows = response.getJSONObject("areas_crimes");
-                    mCache.insertAreaCrimes(context, areasCrimesRows);
-                    resultsCommunicator.useResults();
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                    Log.e(TAG, "JSONException IN onSuccess IN getCountyOutlines!");
+                class InsertAreaCrimeData extends AsyncTask<JSONObject, Integer, Long> {
+                    @Override
+                    protected Long doInBackground(JSONObject... params) {
+                        try {
+                            JSONObject areasCrimesRows = response.getJSONObject("areas_crimes");
+                            mCache.insertAreaCrimes(context, areasCrimesRows);
+                            mMainHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    resultsCommunicator.useResults();
+                                }
+                            });
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                            Log.e(TAG, "error in async task in getNovaCrime cache insertion.");
+                        }
+                        return 1L;
+                    }
                 }
+                new InsertAreaCrimeData().execute();
             }
 
             @Override

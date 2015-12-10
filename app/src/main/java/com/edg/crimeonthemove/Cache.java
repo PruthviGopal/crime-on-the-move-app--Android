@@ -502,6 +502,7 @@ public class Cache {
     //~Begin Area Outline Crimes Stuff--------------------------------------------------------------
     public void insertAreaCrimes(Context context, JSONObject areasCrimes) throws JSONException{
         Log.v(TAG, "insertAreaCrimes");
+        Log.d(TAG, "areasCrimes: " + areasCrimes);
         DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(context);
         SQLiteDatabase database = accessPoint.getWritableDatabase();
 

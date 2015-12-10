@@ -321,6 +321,7 @@ public class DataSettingsFragment extends Fragment {
             }
         });
 
+        // Enable/Disable visual marker clustering
         CheckBox markerClusteringCheckBox = (CheckBox) view.findViewById(R.id.checkbox_marker_clustering);
         setupCheckBox(markerClusteringCheckBox, Constants.CLUSTER_MARKERS_OPTION);
 

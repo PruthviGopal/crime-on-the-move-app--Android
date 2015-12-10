@@ -367,6 +367,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
+        /*
+        TODO: Re-add =D
         Button getDataButton = (Button) view.findViewById(R.id.button_get_crime_data);
         getDataButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -418,6 +420,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 }
             }
         });
+        */
         Button getClusteringButton = (Button) view.findViewById(R.id.button_get_clustering);
         getClusteringButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -488,16 +491,23 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED) {
                     params.put(Constants.BACK_END_NUM_CLUSTERS_PARAM, String.valueOf(numClusters));
                     mListener.getKMeansClusteringData(params);
-                    Toast.makeText(getActivity(), "Running K-Means Clustering...", Toast.LENGTH_SHORT).show();
+                    clearOverlays();
+                    Toast.makeText(getActivity(), "Running K-Means Clustering...",
+                            Toast.LENGTH_SHORT).show();
                 } else if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.SPECTRAL_CLUSTERING_SELECTED) {
                     params.put(Constants.BACK_END_NUM_CLUSTERS_PARAM, String.valueOf(numClusters));
                     mListener.getSpectralClusteringData(params);
-                    Toast.makeText(getActivity(), "Running Spectral Clustering...", Toast.LENGTH_SHORT).show();
+                    clearOverlays();
+                    Toast.makeText(getActivity(), "Running Spectral Clustering...",
+                            Toast.LENGTH_SHORT).show();
                 } else if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.AFFINITY_PROPAGATION_SELECTED) {
                     mListener.getAffinityPropagationData(params);
-                    Toast.makeText(getActivity(), "Running Affinity Propagation...", Toast.LENGTH_SHORT).show();
+                    clearOverlays();
+                    Toast.makeText(getActivity(), "Running Affinity Propagation...",
+                            Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(getActivity(), "No clustering specified?", Toast.LENGTH_LONG).show();
+                    Toast.makeText(getActivity(), "No clustering specified?",
+                            Toast.LENGTH_LONG).show();
                 }
             }
         });
@@ -506,6 +516,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             @Override
             public void onClick(View v) {
                 mListener.getCountyOverlays(null);
+                clearOverlays();
             }
         });
         return view;
@@ -515,7 +526,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     public void onMapReady(GoogleMap googleMap) {
         Log.i(TAG, "onMapReady");
         mGoogleMap = googleMap;
-        mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(new LatLng(38.8824271026509, -77.0300120214052)));
+        mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(
+                new LatLng(38.8824271026509, -77.0300120214052)));
         mGoogleMap.moveCamera(CameraUpdateFactory.zoomTo(DEFAULT_ZOOM_LEVEL));
         Log.d(TAG, "mAreaOverlays:size(): " + mAreaOverlays.size());
         for (int i = 0; i < mAreaOverlays.size(); i++) {
@@ -577,7 +589,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 LinearLayout linearLayout = (LinearLayout) view.findViewById(R.id.linear_layout_top);
 
                 String snippet = marker.getSnippet();
-                String[] topFiveCrimes = snippet.replace("[", "").replace("]", "").replace("\"", "").split(",");
+                String[] topFiveCrimes
+                        = snippet.replace("[", "").replace("]", "").replace("\"", "").split(",");
                 TextView textView;
                 String crime;
                 textView = new TextView(getContext());
@@ -703,7 +716,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         Log.i(TAG, "onResume");
         super.onResume();
         mMapView.onResume();
-        mOptions = getActivity().getSharedPreferences(Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
+        mOptions = getActivity().getSharedPreferences(
+                Constants.DATA_OPTIONS_NAME, Context.MODE_PRIVATE);
     }
 
     @Override
@@ -761,7 +775,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     public void addNovaCrimes(String[] countyConstraints) {
         Log.i(TAG, "addNovaCrimes()");
         Log.i(TAG, "countyConstraints: " + Arrays.toString(countyConstraints));
-        Toast.makeText(getContext(), "Placing crime markers, this may take awhile.....", Toast.LENGTH_LONG).show();
+        Toast.makeText(getContext(), "Placing crime markers, this may take awhile.....",
+                Toast.LENGTH_LONG).show();
         final Cache.NovaCrimeQuery novaCrimeQuery = new Cache.NovaCrimeQuery(getContext(), countyConstraints) {
             private int i = 0;
             @Override
@@ -776,7 +791,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     public void run() {
                         if (!mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
                             Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                    .title(address + ": " + offense)
+                                    .title(offense)
+                                    .snippet(address)
                                     .position(latLng));
                         } else {
                             mClusterManager.addItem(new MarkerClusterItem(latLng));
@@ -784,7 +800,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
                             if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
-                                mGoogleMap.moveCamera(CameraUpdateFactory.zoomTo(DEFAULT_ZOOM_LEVEL));
+                                mGoogleMap.moveCamera(
+                                        CameraUpdateFactory.zoomTo(DEFAULT_ZOOM_LEVEL));
                             }
                         }
                     }
@@ -801,7 +818,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     e.printStackTrace();
                 }
                 if (getContext() != null) {
-                    Toast.makeText(getContext(), "Done placing crime markers!!!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "Done placing crime markers!!!",
+                            Toast.LENGTH_SHORT).show();
                 }
                 Log.i(TAG, "FINISHED PLACING NOVA CRIME MARKERS!");
             }
@@ -813,7 +831,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      */
     public void addDcCrimes() {
         Log.v(TAG, "addDcCrimes()");
-        Toast.makeText(getContext(), "Placing DC crime markers, this may take awhile.....", Toast.LENGTH_LONG).show();
+        Toast.makeText(getContext(), "Placing DC crime markers, this may take awhile.....",
+                Toast.LENGTH_LONG).show();
         final Cache.DcCrimeQuery dcCrimeQuery = new Cache.DcCrimeQuery(getContext()) {
             private int i = 0;
             @Override
@@ -824,7 +843,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     @Override
                     public void run() {
                         Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                .title(address + ": " + offense)
+                                .title(offense)
+                                .snippet(address)
                                 .position(latLng));
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
@@ -879,7 +899,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     @Override
                     public void run() {
                         Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                .title(address + ": " + offense)
+                                .title(offense)
+                                .snippet(offense)
                                 .position(latLng));
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
@@ -915,15 +936,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      */
     public void addAreaOverlay(Map<String, List<LatLng>> areaBoundaries,
             Map<String, Map<String, String>> areaStatistics) {
-
-        // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
-        for (int i = 0; i < mAreaOverlays.size(); i++) {
-            mAreaOverlays.get(i).remove();
-        }
-        mAreaOverlays.clear();
-        // TODO: Remove....
-        mGoogleMap.clear();
-
         //Polygon polygon;
         Marker marker = null;
         Map<String, String> specificAreaStatistics;
@@ -982,7 +994,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      * @return BitmapDescriptor with the circle drawn in it.
      */
     private BitmapDescriptor getCircleMarkerIcon() {
-
         ShapeDrawable shapeDrawable = new ShapeDrawable(new OvalShape());
         shapeDrawable.setIntrinsicHeight(5);
         shapeDrawable.setIntrinsicWidth(5);
@@ -1027,20 +1038,21 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
-     * Add overlays for counties in Virginia.
+     * Clears all overlays currently drawn on the GoogleMap.
      */
-    public void addCountyOverlay() {
-        /*
-        // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
+    public void clearOverlays() {
         for (int i = 0; i < mAreaOverlays.size(); i++) {
             mAreaOverlays.get(i).remove();
         }
         mAreaOverlays.clear();
-        // TODO: Remove....
-        mGoogleMap.clear();
-        */
+    }
 
-        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....", Toast.LENGTH_LONG).show();
+    /**
+     * Add overlays for counties in Virginia.
+     */
+    public void addCountyOverlay() {
+        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....",
+                Toast.LENGTH_LONG).show();
         final Cache.NovaCountyQuery novaCountyQuery = new Cache.NovaCountyQuery(getContext()) {
             @Override
             public void useData(final String countyName, final List<LatLng> countyOutline,
@@ -1085,7 +1097,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 }
                 Toast.makeText(getContext(), "Done drawing county areas!",
                         Toast.LENGTH_SHORT).show();
-                // mHandler.removeCallbacks(mOverlayHoleFindingTask);
+                mHandler.removeCallbacks(mOverlayHoleFindingTask);
                 mHandler.post(mOverlayHoleFindingTask);
             }
         });
@@ -1095,16 +1107,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      * Add overlays for DC (potentially wards if that information surfaces...).
      */
     public void addDcOverlay() {
-        /*
-        // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
-        for (int i = 0; i < mAreaOverlays.size(); i++) {
-            mAreaOverlays.get(i).remove();
-        }
-        mAreaOverlays.clear();
-        // TODO: Remove....
-        mGoogleMap.clear();
-        */
-
         Toast.makeText(getContext(), "Drawing areas, this may take awhile.....",
                 Toast.LENGTH_LONG).show();
         final Cache.DcOutlineQuery dcOutlineQuery = new Cache.DcOutlineQuery(getContext()) {
@@ -1150,6 +1152,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
                 }
                 Toast.makeText(getContext(), "Done drawing DC areas!", Toast.LENGTH_SHORT).show();
+                mHandler.removeCallbacks(mOverlayHoleFindingTask);
                 mHandler.post(mOverlayHoleFindingTask);
             }
         });
