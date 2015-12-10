@@ -28,6 +28,12 @@
             android:text="Update Data"/>
 
         <Button
+            android:id="@+id/button_get_selected_overlay_data"
+            android:layout_width="100dp"
+            android:layout_height="fill_parent"
+            android:text="Overlay Data"/>
+
+        <Button
             android:id="@+id/button_get_clustering"
             android:layout_width="100dp"
             android:layout_height="fill_parent"
@@ -38,12 +44,6 @@
             android:layout_width="100dp"
             android:layout_height="fill_parent"
             android:text="Get County Overlays"/>
-
-        <Button
-            android:id="@+id/button_get_crime_for_county"
-            android:layout_width="100dp"
-            android:layout_height="fill_parent"
-            android:text="Get Crimes For County"/>
 
     </LinearLayout>
 </LinearLayout>

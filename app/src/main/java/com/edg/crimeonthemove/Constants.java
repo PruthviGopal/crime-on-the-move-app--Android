@@ -45,11 +45,82 @@ public class Constants {
     public static final String CLUSTERING_SELECTION = "ClusteringVarietySelection";
     public static final int K_MEANS_SELECTED = 0;
     public static final int SPECTRAL_CLUSTERING_SELECTED = 1;
+    public static final int AFFINITY_PROPAGATION_SELECTED = 2;
 
     public static final int MAX_CLUSTERS = 10;
+
+    public static final String SELECTED_DC_CRIME_TYPES_OPTION = "SelectedDcCrimeTypesOption";
+    public static final String SELECTED_NOVA_CRIME_TYPES_OPTION = "SelectedNovaCrimeTypesOption";
+
+    // Types of crimes which can be selected upon in DC (also covers EVERY type of crime for DC)
+    public static final String[] DC_CRIME_TYPES = {
+            "MOTOR VEHICLE THEFT",
+            "ROBBERY",
+            "THEFT/OTHER",
+            "BURGLARY",
+            "SEX ABUSE",
+            "HOMICIDE",
+            "THEFT F/AUTO",
+            "ARSON",
+            "ASSAULT W/DANGEROUS WEAPON"
+    };
+    // Types of crimes which can be selected upon in NOVA (DOES NOT cover EVERY type of crime for NOVA)
+    public static final String[] NOVA_CRIME_TYPES = {
+            "larceny",
+            "motor vehicle theft",
+            "burglary",
+            "robbery",
+            "destruction of property",
+            "larceny from a vehicle",
+            "malicious wounding",
+            "assault",
+            "armed robbery",
+            "drunk in public",
+            "vandalism",
+            "indecent exposure",
+            "grand larceny",
+            "suspicious event",
+            "peeping tom",
+            "hit and run",
+            "felonious assault",
+            "fraud",
+            "larceny from building",
+            "sexual assault",
+            "abduction",
+            "bank robbery",
+            "unlawful entry",
+            "larceny shoplifting",
+            "battery",
+            "robbery by force",
+            "graffiti",
+            "sexual battery",
+            "tampering with a vehicle",
+            "petit larceny",
+            "damage to property",
+            "exposure",
+            "homicide",
+            "assault by mob",
+            "driving under the influence",
+            "breaking and entering",
+            "driving while intoxicated",
+            "trespassing",
+            "fatal crash",
+            "carjacking",
+            "disorderly conduct",
+            "simple assault",
+            "arson",
+            "residential burgalry",
+            "burglary of occupied dwelling",
+            "found property",
+            "domestic dispute"
+    };
 
     // Server Side Parameters
     public static final String BACK_END_NUM_CLUSTERS_PARAM = "num_clusters";
     public static final String BACK_END_NOVA_DATA_PARAM = "nova_data";
     public static final String BACK_END_DC_DATA_PARAM = "dc_data";
+    public static final String BACK_END_CRIME_TYPES_PARAM = "crimes_considered";
+    public static final String BACK_END_NOVA_CRIME_TYPES_PARAM = "nova";
+    public static final String BACK_END_DC_CRIME_TYPES_PARAM = "dc";
+    public static final String BACK_END_CRIME_OUTLINES_PARAM = "outlines";
 }

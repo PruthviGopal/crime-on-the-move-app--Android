@@ -91,6 +91,12 @@
                 android:layout_height="wrap_content"
                 android:checked="false"
                 android:text="Spectral Clustering"/>
+            <RadioButton
+                android:id="@+id/radio_button_affinity_propagation"
+                android:layout_width="fill_parent"
+                android:layout_height="wrap_content"
+                android:checked="false"
+                android:text="Affinity Propagation"/>
         </RadioGroup>
 
         <TextView
@@ -101,6 +107,21 @@
             android:id="@+id/seek_bar_num_clusters"
             android:layout_width="fill_parent"
             android:layout_height="wrap_content" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Crimes to Cluster On" />
+        <Button
+            android:id="@+id/button_set_dc_clustering_features"
+            android:layout_width="180dp"
+            android:layout_height="wrap_content"
+            android:text="Set DC Clustering Features" />
+        <Button
+            android:id="@+id/button_set_nova_clustering_features"
+            android:layout_width="180dp"
+            android:layout_height="wrap_content"
+            android:text="Set NOVA Clustering Features" />
 
         <TextView
             android:layout_width="match_parent"

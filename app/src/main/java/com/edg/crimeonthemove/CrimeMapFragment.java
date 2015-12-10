@@ -4,11 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.graphics.drawable.ShapeDrawable;
 import android.graphics.drawable.shapes.OvalShape;
-import android.graphics.drawable.shapes.Shape;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -41,23 +38,30 @@ import com.google.maps.android.clustering.ClusterManager;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
+import java.io.UnsupportedEncodingException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
 
     public interface OnFragmentInteractionListener {
         void getDCCrimeData();
-        void getNovaCrimeData();
+        void getNovaCrimeData(String[] counties);
+        void getDCAndNovaCrime(String[] novaCounties);
+        void getAreaCrimeData(List<List<LatLng>> area);
         void getCountyOverlays(Map<String, String> params);
         void getKMeansClusteringData(Map<String, String> params);
         void getSpectralClusteringData(Map<String, String> params);
-        void getCountyCrime(String[] counties);
+        void getAffinityPropagationData(Map<String, String> params);
     }
 
     private static final String TAG = "CrimeMapFragment";
@@ -72,7 +76,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             0x8FFFB300, // Vivid Yellow
             0x8F803E75, // Strong Purple
             0x8FFF6800, // Vivid Orange
-            0x8FA6BDD7, // Very Light Blue -- TODO: This one has gotta go
             0x8FC10020, // Vivid Red
             0x8FCEA262, // Grayish Yellow
             0x8F817066, // Medium Gray
@@ -250,13 +253,69 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     private ClusterManager<MarkerClusterItem> mClusterManager;
     private ArrayList<OverlayWrapper> mAreaOverlays;
     private int mSelectedOverlayIndex;
-    private ArrayList<Marker> mMarkers;
     private SharedPreferences mOptions;
     private Cache mCache;
 
     private final HandlerThread mHandlerThread = new HandlerThread("UI Offloader");
     private Handler mHandler;
     private final Handler mMainThreadHandler = new Handler(Looper.getMainLooper());
+
+    /**
+     * Task used to find holes that should be made in overlays
+     */
+    private final Runnable mOverlayHoleFindingTask = new Runnable() {
+        @Override
+        public void run() {
+            Log.i(TAG, "Starting overlay hole finding task....");
+            // Add holes to county overlays if there are overlaps (which there should be....)
+            List<LatLng> polygon;
+            LatLng point1;
+            LatLng point2;
+            LatLng point3;
+            OverlayWrapper curOverlay;
+            for (int i = 0; i < mAreaOverlays.size(); i++) {
+                polygon = mAreaOverlays.get(i).getPoints();
+                for (int j = 0; j < mAreaOverlays.size(); j++) {
+                    if (j == i) {
+                        continue;
+                    }
+                    // Check if the first point, middle point, and last point are in polygon
+                    // If so, then the jth overlay is considered to be contained
+                    // within the ith overlay, and thus a hole should be included in the polygon
+                    // This is an approximation, to properly check I should iterate over each point
+                    // or apply a different algorithm.
+                    // However, for my uses, this will almost certainly suffice and will also
+                    // provide a higher degree of performance.
+                    point1 = mAreaOverlays.get(j).getPoints().get(0);
+                    point2 = mAreaOverlays.get(j).getPoints().get(mAreaOverlays.get(j).getPoints().size() / 2);
+                    point3 = mAreaOverlays.get(j).getPoints().get(mAreaOverlays.get(j).getPoints().size() - 1);
+                    if (windingNumberHitCheck(polygon, point1)
+                            && windingNumberHitCheck(polygon, point2)
+                            && windingNumberHitCheck(polygon, point3)
+                            && !mAreaOverlays.get(i).holes.contains(mAreaOverlays.get(j).getPoints())) {
+                        Log.d(TAG, "Adding hole in county: " + mAreaOverlays.get(i).name
+                                + " using county: " + mAreaOverlays.get(j).name);
+                        curOverlay = mAreaOverlays.get(i);
+                        curOverlay.holes.add(mAreaOverlays.get(j).getPoints());
+                    }
+                }
+            }
+            // Remove holes on main thread
+            mMainThreadHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    OverlayWrapper curOverlay;
+                    for (int i = 0; i < mAreaOverlays.size(); i++) {
+                        curOverlay = mAreaOverlays.get(i);
+                        if (!curOverlay.holes.isEmpty()) {
+                            curOverlay.polygon.setHoles(curOverlay.holes);
+                        }
+                    }
+                }
+            });
+            Log.i(TAG, "FINISHED overlay hole finding task!");
+        }
+    };
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -274,7 +333,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             mAreaOverlays = new ArrayList<>(7);
             mSelectedOverlayIndex = -1;
         }
-        mMarkers = new ArrayList<>(3000);
         mCache = new Cache();
 
         mHandlerThread.start();
@@ -292,21 +350,71 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mMapView.onCreate(savedInstanceState);
         mMapView.getMapAsync(this);
 
+        Button getSelectedOverlayDataButton = (Button) view.findViewById(R.id.button_get_selected_overlay_data);
+        getSelectedOverlayDataButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mSelectedOverlayIndex != -1) {
+                    Log.i(TAG, "Pulling crime in selected area....");
+                    List<LatLng> area = mAreaOverlays.get(mSelectedOverlayIndex).getPoints();
+                    List<List<LatLng>> areas = new ArrayList<>();
+                    areas.add(area);
+                    mListener.getAreaCrimeData(areas);
+                } else {
+                    Toast.makeText(getContext(),
+                            "No overlay is selected!", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
         Button getDataButton = (Button) view.findViewById(R.id.button_get_crime_data);
         getDataButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
-                    mListener.getNovaCrimeData();
+                // NOVA and DC Data
+                if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)
+                        && mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
+                    int activeCountiesCount = 0;
+                    for (int i = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
+                        if (mOptions.getBoolean(Constants.COUNTY_CRIME_OPTIONS[i], false)) {
+                            activeCountiesCount++;
+                        }
+                    }
+                    String[] selectedCounties = new String[activeCountiesCount];
+                    for (int i = 0, j = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
+                        if (mOptions.getBoolean(Constants.COUNTY_CRIME_OPTIONS[i], false)) {
+                            selectedCounties[j] = Constants.COUNTY_NAMES.get(Constants.COUNTY_CRIME_OPTIONS[i]);
+                            j++;
+                        }
+                    }
+                    mListener.getDCAndNovaCrime(selectedCounties);
+                    Toast.makeText(getActivity(), "Pulling NOVA and DC data...",
+                            Toast.LENGTH_SHORT).show();
+                    // NOVA Data
+                } else if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
+                    int activeCountiesCount = 0;
+                    for (int i = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
+                        if (mOptions.getBoolean(Constants.COUNTY_CRIME_OPTIONS[i], false)) {
+                            activeCountiesCount++;
+                        }
+                    }
+                    String[] selectedCounties = new String[activeCountiesCount];
+                    for (int i = 0, j = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
+                        if (mOptions.getBoolean(Constants.COUNTY_CRIME_OPTIONS[i], false)) {
+                            selectedCounties[j] = Constants.COUNTY_NAMES.get(Constants.COUNTY_CRIME_OPTIONS[i]);
+                            j++;
+                        }
+                    }
+                    mListener.getNovaCrimeData(selectedCounties);
                     Toast.makeText(getActivity(), "Pulling NOVA data...", Toast.LENGTH_SHORT).show();
-                }
-                if (mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
+                    // DC Data
+                } else if (mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
                     mListener.getDCCrimeData();
                     Toast.makeText(getActivity(), "Pulling DC data...", Toast.LENGTH_SHORT).show();
-                }
-                if (!mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)
-                        && !mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
-                    Toast.makeText(getActivity(), "You must select a data set...", Toast.LENGTH_LONG).show();
+                    // No Data....
+                } else {
+                    Toast.makeText(getActivity(),
+                            "You must select a data set...", Toast.LENGTH_LONG).show();
                 }
             }
         });
@@ -314,7 +422,8 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         getClusteringButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.v(TAG, "Clustering onClick, clustering selection: " + mOptions.getInt(Constants.CLUSTERING_SELECTION, -1));
+                Log.v(TAG, "Clustering onClick, clustering selection: "
+                        + mOptions.getInt(Constants.CLUSTERING_SELECTION, -1));
 
                 Map<String, String> params = new HashMap<>();
 
@@ -335,6 +444,43 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     params.put(Constants.BACK_END_DC_DATA_PARAM, Constants.BACK_END_DC_DATA_PARAM);
                 }
 
+                // Crime Types to cluster on
+                JSONObject jsonCrimesConsidered = new JSONObject();
+
+                // NOVA Crime Types
+                Set<String> novaCrimeTypesSet = new HashSet<>();
+                novaCrimeTypesSet = mOptions.getStringSet(
+                        Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, novaCrimeTypesSet);
+                Log.i(TAG, "novaCrimeTypesSet: " + novaCrimeTypesSet);
+                // If no crime types are selected, send nothing, which is null, which means everything
+                if (novaCrimeTypesSet.size() > 0) {
+                    String[] novaCrimeTypesArray = new String[novaCrimeTypesSet.size()];
+                    novaCrimeTypesSet.toArray(novaCrimeTypesArray);
+                    try {
+                        JSONArray jsonNovaCrimeTypesArray = new JSONArray(novaCrimeTypesArray);
+                        jsonCrimesConsidered.put(Constants.BACK_END_NOVA_CRIME_TYPES_PARAM, jsonNovaCrimeTypesArray.toString());
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+                // DC Crime Types
+                Set<String> dcCrimeTypesSet = new HashSet<>();
+                dcCrimeTypesSet = mOptions.getStringSet(
+                        Constants.SELECTED_DC_CRIME_TYPES_OPTION, dcCrimeTypesSet);
+                Log.i(TAG, "dcCrimeTypesSet: " + dcCrimeTypesSet);
+                // If no crime types are selected, send nothing, which is null, which means everything
+                if (dcCrimeTypesSet.size() > 0) {
+                    String[] dcCrimeTypesArray = new String[dcCrimeTypesSet.size()];
+                    dcCrimeTypesSet.toArray(dcCrimeTypesArray);
+                    try {
+                        JSONArray jsonDcCrimeTypesArray = new JSONArray(dcCrimeTypesArray);
+                        jsonCrimesConsidered.put(Constants.BACK_END_DC_CRIME_TYPES_PARAM, jsonDcCrimeTypesArray.toString());
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+                params.put(Constants.BACK_END_CRIME_TYPES_PARAM, jsonCrimesConsidered.toString());
+
                 // Number of clusters
                 int numClusters = mOptions.getInt(Constants.NUM_CLUSTERS_OPTION, -1);
 
@@ -347,6 +493,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     params.put(Constants.BACK_END_NUM_CLUSTERS_PARAM, String.valueOf(numClusters));
                     mListener.getSpectralClusteringData(params);
                     Toast.makeText(getActivity(), "Running Spectral Clustering...", Toast.LENGTH_SHORT).show();
+                } else if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.AFFINITY_PROPAGATION_SELECTED) {
+                    mListener.getAffinityPropagationData(params);
+                    Toast.makeText(getActivity(), "Running Affinity Propagation...", Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(getActivity(), "No clustering specified?", Toast.LENGTH_LONG).show();
                 }
@@ -357,25 +506,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             @Override
             public void onClick(View v) {
                 mListener.getCountyOverlays(null);
-            }
-        });
-        // TODO: Merge this into regular get data
-        Button getCrimeForCounty = (Button) view.findViewById(R.id.button_get_crime_for_county);
-        getCrimeForCounty.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // TODO: Reconsider what I'm doing here (with using an array that is...) after testing
-                int totalTrue = 0;
-                String[] countySelections = new String[Constants.COUNTY_CRIME_OPTIONS.length];
-                for (int i = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
-                    String countyOption = Constants.COUNTY_CRIME_OPTIONS[i];
-                    if (mOptions.getBoolean(countyOption, false)) {
-                        countySelections[totalTrue] = Constants.COUNTY_NAMES.get(countyOption);
-                        totalTrue += 1;
-                    }
-                }
-                countySelections = Arrays.copyOf(countySelections, totalTrue);
-                mListener.getCountyCrime(countySelections);
             }
         });
         return view;
@@ -425,8 +555,11 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     // Only highlight if new selection was not previous selection
                     if (selectedOverlay != mSelectedOverlayIndex) {
                         mAreaOverlays.get(selectedOverlay).highlightOverlay();
+                        mSelectedOverlayIndex = selectedOverlay;
+                        // If selectedOverlay == mSelectedOverlay, de-select
+                    } else {
+                        mSelectedOverlayIndex = -1;
                     }
-                    mSelectedOverlayIndex = selectedOverlay;
                 }
             }
         });
@@ -448,7 +581,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 TextView textView;
                 String crime;
                 textView = new TextView(getContext());
-                textView.setText("Top 5 Crimes:");
+                textView.setText(marker.getTitle() + ": Top 5 Crimes:");
                 textView.setTextSize(25);
                 linearLayout.addView(textView);
                 for (int i = 0; i < topFiveCrimes.length; i++) {
@@ -620,27 +753,31 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mListener = null;
     }
 
+    /**
+     * Add crimes in Nova from the cache, subject to constraints on counties.
+     *
+     * @param countyConstraints array of counties which should be included.
+     */
     public void addNovaCrimes(String[] countyConstraints) {
         Log.i(TAG, "addNovaCrimes()");
         Log.i(TAG, "countyConstraints: " + Arrays.toString(countyConstraints));
-        mMarkers.clear();
         Toast.makeText(getContext(), "Placing crime markers, this may take awhile.....", Toast.LENGTH_LONG).show();
         final Cache.NovaCrimeQuery novaCrimeQuery = new Cache.NovaCrimeQuery(getContext(), countyConstraints) {
             private int i = 0;
             @Override
-            public void useData(final double latitude, final double longitude, final String address) {
+            public void useData(final double latitude, final double longitude,
+                    final String address, final String offense) {
                 final LatLng latLng = new LatLng(latitude, longitude);
                 if (latitude == 0.0) {
-                    Log.i(TAG, "terrible LatLng: " + latLng);
+                    Log.d(TAG, "terrible LatLng: " + latLng);
                 }
                 mMainThreadHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         if (!mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
                             Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                    .title(latLng.toString()) // .title(address)
+                                    .title(address + ": " + offense)
                                     .position(latLng));
-                            mMarkers.add(marker);
                         } else {
                             mClusterManager.addItem(new MarkerClusterItem(latLng));
                         }
@@ -671,22 +808,24 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
+    /**
+     * Add crimes in DC from the cache.
+     */
     public void addDcCrimes() {
         Log.v(TAG, "addDcCrimes()");
-        mMarkers.clear();
         Toast.makeText(getContext(), "Placing DC crime markers, this may take awhile.....", Toast.LENGTH_LONG).show();
         final Cache.DcCrimeQuery dcCrimeQuery = new Cache.DcCrimeQuery(getContext()) {
             private int i = 0;
             @Override
-            public void useData(final double latitude, final double longitude, final String address) {
+            public void useData(final double latitude, final double longitude,
+                    final String address, final String offense) {
                 final LatLng latLng = new LatLng(latitude, longitude);
                 mMainThreadHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         Marker marker = mGoogleMap.addMarker(new MarkerOptions()
-                                .title(address)
+                                .title(address + ": " + offense)
                                 .position(latLng));
-                        mMarkers.add(marker);
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
                             if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
@@ -712,6 +851,68 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         });
     }
 
+    /**
+     * Place crime markers in the areas defined by the List of Lists of LatLng objects.
+     *
+     * @param areas List of Lists of LatLng objects which define an area.
+     */
+    public void addAreaCrime(List<List<LatLng>> areas) {
+        Log.v(TAG, "addAreaCrime");
+        // Compute areaIds
+        List<String> areaIds = new ArrayList<>();
+        for (int i = 0; i < areas.size(); i++) {
+            try {
+                areaIds.add(Cache.computeAreaId(areas.get(i)));
+            } catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
+                e.printStackTrace();
+            }
+        }
+        Toast.makeText(getContext(), "Placing area markers...this will take a moment",
+                Toast.LENGTH_SHORT).show();
+        final Cache.AreaCrimeQuery areaCrimeQuery = new Cache.AreaCrimeQuery(getContext(), areaIds) {
+            private int i = 0;
+            @Override
+            void useData(double latitude, double longitude,
+                    final String address, final String offense) {
+                final LatLng latLng = new LatLng(latitude, longitude);
+                mMainThreadHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Marker marker = mGoogleMap.addMarker(new MarkerOptions()
+                                .title(address + ": " + offense)
+                                .position(latLng));
+                        if (i == 0) {
+                            mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+                            if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
+                                mGoogleMap.moveCamera(CameraUpdateFactory.zoomTo(DEFAULT_ZOOM_LEVEL));
+                            }
+                        }
+                    }
+                });
+                i++;
+            }
+        };
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mCache.runQuery(areaCrimeQuery);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                Log.i(TAG, "FINISHED PLACING AREA CRIME MARKERS!");
+                Toast.makeText(getContext(), "Done placing area crime markers!!!",
+                        Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    /**
+     * Add a generic overlay of areas defined by Map<String, List<LatLng>>.
+     *
+     * @param areaBoundaries the boundaries of the overlays.
+     * @param areaStatistics statistics relating to each overlay.
+     */
     public void addAreaOverlay(Map<String, List<LatLng>> areaBoundaries,
             Map<String, Map<String, String>> areaStatistics) {
 
@@ -825,8 +1026,11 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         return new LatLng(minY + (maxY - minY) / 2, minX + (maxX - minX) / 2);
     }
 
-
+    /**
+     * Add overlays for counties in Virginia.
+     */
     public void addCountyOverlay() {
+        /*
         // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
         for (int i = 0; i < mAreaOverlays.size(); i++) {
             mAreaOverlays.get(i).remove();
@@ -834,23 +1038,21 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mAreaOverlays.clear();
         // TODO: Remove....
         mGoogleMap.clear();
+        */
 
         Toast.makeText(getContext(), "Drawing areas, this may take awhile.....", Toast.LENGTH_LONG).show();
         final Cache.NovaCountyQuery novaCountyQuery = new Cache.NovaCountyQuery(getContext()) {
             @Override
             public void useData(final String countyName, final List<LatLng> countyOutline,
                     final Map<String, String> countyStatistics) {
-                // Take hash code and mod by color length, this should produce random enough color
-                // dispersion to be visually appealing.
-                final int colorKey = ((Math.abs(countyName.hashCode()) % colors.length) * 57 + 17) % colors.length;
                 // Run UI rendering on the main thread
                 mMainThreadHandler.post(new Runnable() {
                     @Override
                     public void run() {
                         Polygon polygon = mGoogleMap.addPolygon(new PolygonOptions()
                                 .addAll(countyOutline)
-                                .fillColor(colors[colorKey])
-                                .strokeColor(colors[colorKey])
+                                .fillColor(getCountyAndDcColor(countyName))
+                                .strokeColor(getCountyAndDcColor(countyName))
                                 .zIndex(20));
                         LatLng centerPoint = findCenter(countyOutline);
                         String statisticsString = "";
@@ -864,64 +1066,11 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                                 .alpha(0)
                                 .title(countyName)
                                 .snippet(statisticsString));
-                        mAreaOverlays.add(new OverlayWrapper(countyName, colors[colorKey],
-                                polygon, marker, countyStatistics));
+                        mAreaOverlays.add(new OverlayWrapper(countyName,
+                                getCountyAndDcColor(countyName), polygon, marker,
+                                countyStatistics));
                     }
                 });
-            }
-        };
-
-        final Runnable overlayHoleFindingTask = new Runnable() {
-            @Override
-            public void run() {
-                Log.i(TAG, "Starting overlay hole finding task....");
-                // Add holes to county overlays if there are overlaps (which there should be....)
-                List<LatLng> polygon;
-                LatLng point1;
-                LatLng point2;
-                LatLng point3;
-                OverlayWrapper curOverlay;
-                for (int i = 0; i < mAreaOverlays.size(); i++) {
-                    polygon = mAreaOverlays.get(i).getPoints();
-                    for (int j = 0; j < mAreaOverlays.size(); j++) {
-                        if (j == i) {
-                            continue;
-                        }
-                        // Check if the first point, middle point, and last point are in polygon
-                        // If so, then the jth overlay is considered to be contained
-                        // within the ith overlay, and thus a hole should be included in the polygon
-                        // This is an approximation, to properly check I should iterate over each point
-                        // or apply a different algorithm.
-                        // However, for my uses, this will almost certainly suffice and will also
-                        // provide a higher degree of performance.
-                        point1 = mAreaOverlays.get(j).getPoints().get(0);
-                        point2 = mAreaOverlays.get(j).getPoints().get(mAreaOverlays.get(j).getPoints().size() / 2);
-                        point3 = mAreaOverlays.get(j).getPoints().get(mAreaOverlays.get(j).getPoints().size() - 1);
-                        if (windingNumberHitCheck(polygon, point1)
-                                && windingNumberHitCheck(polygon, point2)
-                                && windingNumberHitCheck(polygon, point3)) {
-                            Log.d(TAG, "Adding hole in county: " + mAreaOverlays.get(i).name
-                                    + " using county: " + mAreaOverlays.get(j).name);
-                            curOverlay = mAreaOverlays.get(i);
-                            curOverlay.holes.add(mAreaOverlays.get(j).getPoints());
-                        }
-                    }
-                }
-                // Remove holes on main thread
-                mMainThreadHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        OverlayWrapper curOverlay;
-                        for (int i = 0; i < mAreaOverlays.size(); i++) {
-                            curOverlay = mAreaOverlays.get(i);
-                            if (!curOverlay.holes.isEmpty()) {
-                                curOverlay.polygon.setHoles(curOverlay.holes);
-                            }
-                        }
-                    }
-                });
-                Toast.makeText(getContext(), "Done drawing areas!", Toast.LENGTH_SHORT).show();
-                Log.i(TAG, "FINISHED overlay hole finding task!");
             }
         };
 
@@ -934,11 +1083,135 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     e.printStackTrace();
                     Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
                 }
-                mHandler.post(overlayHoleFindingTask);
+                Toast.makeText(getContext(), "Done drawing county areas!",
+                        Toast.LENGTH_SHORT).show();
+                // mHandler.removeCallbacks(mOverlayHoleFindingTask);
+                mHandler.post(mOverlayHoleFindingTask);
             }
         });
     }
 
+    /**
+     * Add overlays for DC (potentially wards if that information surfaces...).
+     */
+    public void addDcOverlay() {
+        /*
+        // TODO: I need to figure out how I'm REALLY going to be managing these overlays....
+        for (int i = 0; i < mAreaOverlays.size(); i++) {
+            mAreaOverlays.get(i).remove();
+        }
+        mAreaOverlays.clear();
+        // TODO: Remove....
+        mGoogleMap.clear();
+        */
+
+        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....",
+                Toast.LENGTH_LONG).show();
+        final Cache.DcOutlineQuery dcOutlineQuery = new Cache.DcOutlineQuery(getContext()) {
+            @Override
+            public void useData(final String wardName, final List<LatLng> wardOutline,
+                                final Map<String, String> wardStatistics) {
+                // Run UI rendering on the main thread
+                mMainThreadHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Polygon polygon = mGoogleMap.addPolygon(new PolygonOptions()
+                                .addAll(wardOutline)
+                                .fillColor(getCountyAndDcColor(wardName))
+                                .strokeColor(getCountyAndDcColor(wardName))
+                                .zIndex(20));
+                        LatLng centerPoint = findCenter(wardOutline);
+                        String statisticsString = "";
+                        for (String statisticsKey : wardStatistics.keySet()) {
+                            statisticsString += wardStatistics.get(statisticsKey);
+                            statisticsString += "\n";
+                        }
+                        Marker marker = mGoogleMap.addMarker(new MarkerOptions()
+                                .position(centerPoint)
+                                .icon(getCircleMarkerIcon())
+                                .alpha(0)
+                                .title(wardName)
+                                .snippet(statisticsString));
+                        mAreaOverlays.add(new OverlayWrapper(wardName,
+                                getCountyAndDcColor(wardName), polygon, marker,
+                                wardStatistics));
+                    }
+                });
+            }
+        };
+
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mCache.runQuery(dcOutlineQuery);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                    Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
+                }
+                Toast.makeText(getContext(), "Done drawing DC areas!", Toast.LENGTH_SHORT).show();
+                mHandler.post(mOverlayHoleFindingTask);
+            }
+        });
+    }
+
+    /**
+     * Static assignment from counties and DC to colors for overlays.
+     *
+     * Colors:
+     * int[] colors = {
+     * 0:   0x8FFFB300, // Vivid Yellow
+     * 1:   0x8F803E75, // Strong Purple
+     * 2:   0x8FFF6800, // Vivid Orange
+     * 3:   0x8FC10020, // Vivid Red
+     * 4:   0x8FCEA262, // Grayish Yellow
+     * 5:   0x8F817066, // Medium Gray
+     * 6:   0x8F007D34, // Vivid Green
+     * 7:   0x8FF6768E, // Strong Purplish Pink
+     * 8:   0x8F00538A, // Strong Blue
+     * 9:   0x8FFF7A5C, // Strong Yellowish Pink
+     * 10:  0x8F53377A, // Strong Violet
+     * 11:  0x8FFF8E00, // Vivid Orange Yellow
+     * 12:  0x8FB32851, // Strong Purplish Red
+     * 13:  0x8FF4C800, // Vivid Greenish Yellow
+     * 14:  0x8F7F180D, // Strong Reddish Brown
+     * 15:  0x8F93AA00, // Vivid Yellowish Green
+     * 16:  0x8F593315, // Deep Yellowish Brown
+     * 17:  0x8FF13A13, // Vivid Reddish Orange
+     * 18:  0x8F232C16  // Dark Olive Green
+     *};
+     *
+     * @param overlayAreaName the name of the county or DC.
+     * @return the color assigned to each color or DC.
+     */
+    private static int getCountyAndDcColor(String overlayAreaName) {
+        switch (overlayAreaName) {
+            case "Alexandria":
+                return colors[0]; // Vivid Yellow
+            case "Arlington":
+                return colors[3]; // Vivid Red
+            case "District of Columbia":
+                return colors[8]; // Strong Blue
+            case "Falls Church":
+                return colors[6]; // Vivid Green
+            case "Fairfax":
+                return colors[18]; // Dark Olive Green
+            case "Fairfax City":
+                return colors[7]; // Strong Purplish Pink
+            case "Loudoun":
+                return colors[12]; // Strong Purplish Red
+            default:
+                throw new IllegalArgumentException("Unknown overlay name passed " +
+                        "to getCountyAndDcColor, overlayAreaName was: " + overlayAreaName);
+        }
+    }
+
+    /**
+     * Check if the input string is an Integer.
+     *
+     * @param inputData the string to check for integer-ness (not a word).
+     * @return true if inputData is integer, false otherwise.
+     */
     private static boolean isInteger(String inputData) {
         if (inputData == null) {
             return false;

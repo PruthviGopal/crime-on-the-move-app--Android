@@ -1,8 +1,6 @@
 package com.edg.crimeonthemove;
 
-import android.content.Intent;
 import android.os.Bundle;
-import android.os.Parcel;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
@@ -152,8 +150,7 @@ public class MainActivity extends FragmentActivity
         Log.i(TAG, "initFragment: " + fragmentIndex);
         FragmentInfo fragmentInfo = mFragments.get(fragmentIndex);
         final FragmentManager fragmentManager = getSupportFragmentManager();
-        // TODO: Back stack problem with main fragment....
-        if (fragmentManager.getBackStackEntryCount() > 1) {
+        if (fragmentIndex == CRIME_MAP_FRAGMENT_INDEX) {
             fragmentManager.beginTransaction()
                     .replace(R.id.container, fragmentInfo.getInstance(), fragmentInfo.getTag())
                     .commit();
@@ -196,17 +193,17 @@ public class MainActivity extends FragmentActivity
         return super.onOptionsItemSelected(item);
     }
 
+    //~Crime data retrieval-------------------------------------------------------------------------
     @Override
     public void getDCCrimeData() {
-        mWebServiceClient.getDCCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
+        mWebServiceClient.getDCCrimes(this, new WebServiceClient.GeneralResultsCommunicatorInterface() {
             @Override
-            public void useResults(List<Map<String, String>> jsonList) {
+            public void useResults() {
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
                     FragmentManager fragmentManager = getSupportFragmentManager();
                     CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
                             .findFragmentByTag(fragmentInfo.getTag());
-                    // crimeMapFragment.addNovaCrimes(jsonList);
                     crimeMapFragment.addDcCrimes();
                 }
             }
@@ -214,26 +211,10 @@ public class MainActivity extends FragmentActivity
     }
 
     @Override
-    public void getNovaCrimeData() {
-        mWebServiceClient.getNovaCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
+    public void getNovaCrimeData(final String[] counties) {
+        mWebServiceClient.getNovaCrimes(this, new WebServiceClient.GeneralResultsCommunicatorInterface() {
             @Override
-            public void useResults(List<Map<String, String>> jsonList) {
-                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
-                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
-                    FragmentManager fragmentManager = getSupportFragmentManager();
-                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
-                            .findFragmentByTag(fragmentInfo.getTag());
-                    crimeMapFragment.addNovaCrimes(null);
-                }
-            }
-        });
-    }
-
-    @Override
-    public void getCountyCrime(final String[] counties) {
-        mWebServiceClient.getNovaCrimes(this, new WebServiceClient.RawDataCommunicatorInterface() {
-            @Override
-            public void useResults(List<Map<String, String>> jsonList) {
+            public void useResults() {
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
                     FragmentManager fragmentManager = getSupportFragmentManager();
@@ -247,11 +228,63 @@ public class MainActivity extends FragmentActivity
     }
 
     @Override
-    public void getCountyOverlays(Map<String, String> params) {
-        mWebServiceClient.getCountyOutlines(this, new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
+    public void getDCAndNovaCrime(final String[] novaCounties) {
+        mWebServiceClient.getNovaCrimes(this,
+                new WebServiceClient.GeneralResultsCommunicatorInterface() {
             @Override
-            public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
-                                   Map<String, Map<String, String>> areaStatistics) {
+            public void useResults() {
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    Log.i(TAG, "passing counties in county crimes to CrimeMapFragment");
+                    crimeMapFragment.addNovaCrimes(novaCounties);
+                }
+                // Pull DC data after Nova data to avoid out of memory error
+                mWebServiceClient.getDCCrimes(getBaseContext(),
+                        new WebServiceClient.GeneralResultsCommunicatorInterface() {
+                    @Override
+                    public void useResults() {
+                        FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                        if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                            FragmentManager fragmentManager = getSupportFragmentManager();
+                            CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                                    .findFragmentByTag(fragmentInfo.getTag());
+                            crimeMapFragment.addDcCrimes();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    @Override
+    public void getAreaCrimeData(final List<List<LatLng>> areas) {
+        mWebServiceClient.getCrimesInOutline(this, areas,
+                new WebServiceClient.GeneralResultsCommunicatorInterface() {
+            @Override
+            public void useResults() {
+                Log.i(TAG, "getAreaCrimeData: useResults\nmCurrentFragmentIndex: " + mCurrentFragmentIndex);
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    Log.i(TAG, "addAreaCrime being called...");
+                    crimeMapFragment.addAreaCrime(areas);
+                }
+            }
+        });
+    }
+
+    //~County overlay retrieval---------------------------------------------------------------------
+    @Override
+    public void getCountyOverlays(Map<String, String> params) {
+        // Nova County overlays
+        mWebServiceClient.getCountyOutlines(this, new WebServiceClient.GeneralResultsCommunicatorInterface() {
+            @Override
+            public void useResults() {
                 Log.i(TAG, "getCOuntyOverlays: useResults\nmCurrentFragmentIndex: " + mCurrentFragmentIndex);
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
@@ -263,8 +296,25 @@ public class MainActivity extends FragmentActivity
                 }
             }
         }, params);
+
+        // DC Overlay (ward information isn't available :()
+        mWebServiceClient.getDcOutline(this, new WebServiceClient.GeneralResultsCommunicatorInterface() {
+            @Override
+            public void useResults() {
+                Log.i(TAG, "getDcOverlays: useResults\nmCurrentFragmentIndex: " + mCurrentFragmentIndex);
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    Log.i(TAG, "addDcOverlay being called...");
+                    crimeMapFragment.addDcOverlay();
+                }
+            }
+        }, params);
     }
 
+    //~ Clustering data retrieval-------------------------------------------------------------------
     @Override
     public void getKMeansClusteringData(Map<String, String> params) {
         mWebServiceClient.getKMeans(new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
@@ -285,11 +335,30 @@ public class MainActivity extends FragmentActivity
 
     @Override
     public void getSpectralClusteringData(Map<String, String> params) {
-        mWebServiceClient.getSpectralClustering(new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
+        mWebServiceClient.getSpectralClustering(
+                new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
             @Override
             public void useResults(Map<String, List<LatLng>> jsonMapOfLists,
                                    Map<String, Map<String, String>> areaStatistics) {
                 Log.v(TAG, "getSpectralClusteringData.useResults()");
+                FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
+                if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
+                    FragmentManager fragmentManager = getSupportFragmentManager();
+                    CrimeMapFragment crimeMapFragment = (CrimeMapFragment) fragmentManager
+                            .findFragmentByTag(fragmentInfo.getTag());
+                    crimeMapFragment.addAreaOverlay(jsonMapOfLists, areaStatistics);
+                }
+            }
+        }, params);
+    }
+
+    @Override
+    public void getAffinityPropagationData(Map<String, String> params) {
+        mWebServiceClient.getAffinityPropagation(
+                new WebServiceClient.GeographicAreaResultsCommunicatorInterface() {
+            @Override
+            public void useResults(Map<String, List<LatLng>> jsonMapOfLists, Map<String, Map<String, String>> areaStatistics) {
+                Log.v(TAG, "getAffinityPropagationData.useResults()");
                 FragmentInfo fragmentInfo = mFragments.get(mCurrentFragmentIndex);
                 if (fragmentInfo.getTag().equals(CrimeMapFragment.getFragmentTitle())) {
                     FragmentManager fragmentManager = getSupportFragmentManager();

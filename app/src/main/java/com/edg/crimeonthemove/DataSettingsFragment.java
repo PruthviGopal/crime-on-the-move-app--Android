@@ -1,6 +1,8 @@
 package com.edg.crimeonthemove;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -11,6 +13,7 @@ import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.util.Log;
+import android.util.SparseArray;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,9 +24,14 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 
+import java.util.HashSet;
+import java.util.Set;
+
 public class DataSettingsFragment extends Fragment {
 
     private static final String TAG = "DataSettingsFragment";
+    private static final String SELECTED_NOVA_CRIME_TYPES_KEY = "SelectedNovaCrimeTypesKey";
+    private static final String SELECTED_DC_CRIME_TYPES_KEY = "SelectedDcCrimeTypesKey";
 
     public static DataSettingsFragment newInstance() {
         return new DataSettingsFragment();
@@ -75,6 +83,17 @@ public class DataSettingsFragment extends Fragment {
             editor.putInt(Constants.NUM_CLUSTERS_OPTION, 4);
         }
 
+        // DC Crime types to include
+        if (!preferences.contains(Constants.SELECTED_DC_CRIME_TYPES_OPTION) || force) {
+            // null corresponds to all types
+            editor.putStringSet(Constants.SELECTED_DC_CRIME_TYPES_OPTION, null);
+        }
+        // NOVA Crime types to include
+        if (!preferences.contains(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION) || force) {
+            // null corresponds to all types
+            editor.putStringSet(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, null);
+        }
+
         // Cluster Markers Option
         if (!preferences.contains(Constants.CLUSTER_MARKERS_OPTION) || force) {
             editor.putBoolean(Constants.CLUSTER_MARKERS_OPTION, true);
@@ -83,13 +102,32 @@ public class DataSettingsFragment extends Fragment {
         editor.apply();
     }
 
+    //~Fields---------------------------------------------------------------------------------------
     private Cache mCache;
     private SharedPreferences mOptions;
+    private Set<String> mSelectedDcCrimeTypes;
+    private Set<String> mSelectedNovaCrimeTypes;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mCache = new Cache();
+        if (savedInstanceState == null) {
+            mSelectedNovaCrimeTypes = new HashSet<>();
+            mSelectedDcCrimeTypes = new HashSet<>();
+        } else {
+            if (mSelectedDcCrimeTypes.contains(SELECTED_DC_CRIME_TYPES_KEY)) {
+                // noinspection ConstantConditions
+                mSelectedDcCrimeTypes = new HashSet<>(
+                        savedInstanceState.getStringArrayList(SELECTED_DC_CRIME_TYPES_KEY));
+            }
+            if (mSelectedDcCrimeTypes.contains(SELECTED_NOVA_CRIME_TYPES_KEY)) {
+                // noinspection ConstantConditions
+                mSelectedNovaCrimeTypes = new HashSet<>(
+                    savedInstanceState.getStringArrayList(SELECTED_NOVA_CRIME_TYPES_KEY));
+            }
+
+        }
     }
 
     @Override
@@ -124,21 +162,28 @@ public class DataSettingsFragment extends Fragment {
         RadioGroup clusteringAlgorithmRadioGroup
                 = (RadioGroup) view.findViewById(R.id.radio_group_clustering_algorithm_choice);
         // Ensure radio button selections match current settings
-        RadioButton radioButton;
+        RadioButton radioButton = null;
         switch (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1)) {
             case Constants.K_MEANS_SELECTED:
                 radioButton = (RadioButton) clusteringAlgorithmRadioGroup
                         .findViewById(R.id.radio_button_k_means);
-                radioButton.setChecked(true);
                 break;
             case Constants.SPECTRAL_CLUSTERING_SELECTED:
                 radioButton = (RadioButton) clusteringAlgorithmRadioGroup
                         .findViewById(R.id.radio_button_spectral_clustering);
-                radioButton.setChecked(true);
                 break;
+            case Constants.AFFINITY_PROPAGATION_SELECTED:
+                radioButton = (RadioButton) clusteringAlgorithmRadioGroup
+                        .findViewById(R.id.radio_button_affinity_propagation);
             default:
                 Log.e(TAG, "PROBLEM in initializing clustering selection radio buttons, default case hit!");
                 break;
+        }
+        try {
+            //noinspection ConstantConditions
+            radioButton.setChecked(true);
+        } catch (NullPointerException exception) {
+            exception.printStackTrace();
         }
         // Setup on select behavior
         clusteringAlgorithmRadioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
@@ -152,11 +197,105 @@ public class DataSettingsFragment extends Fragment {
                     case R.id.radio_button_spectral_clustering:
                         editor.putInt(Constants.CLUSTERING_SELECTION, Constants.SPECTRAL_CLUSTERING_SELECTED);
                         break;
+                    case R.id.radio_button_affinity_propagation:
+                        editor.putInt(Constants.CLUSTERING_SELECTION, Constants.AFFINITY_PROPAGATION_SELECTED);
+                        break;
                     default:
                         Log.e(TAG, "PROBLEM IN onCheckedChanged for clustering algorithm selection, default case hit!");
                         break;
                 }
                 editor.apply();
+            }
+        });
+
+        // Clustering features selection (crime type)
+        // DC
+        Button setDcClusteringFeatures = (Button) view.findViewById(R.id.button_set_dc_clustering_features);
+        final AlertDialog.Builder dcAlertBuilder = new AlertDialog.Builder(getContext());
+        dcAlertBuilder.setMultiChoiceItems(Constants.DC_CRIME_TYPES, null, new DialogInterface.OnMultiChoiceClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+                if (isChecked) {
+                    mSelectedDcCrimeTypes.add(Constants.DC_CRIME_TYPES[which]);
+                } else {
+                    mSelectedDcCrimeTypes.remove(Constants.DC_CRIME_TYPES[which]);
+                }
+            }
+        });
+        dcAlertBuilder.setPositiveButton("Okay", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Log.i(TAG, "dcAlertBuilder:PostiveButton:onClick: " + mSelectedDcCrimeTypes);
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.putStringSet(Constants.SELECTED_DC_CRIME_TYPES_OPTION, new HashSet<>(mSelectedDcCrimeTypes));
+                editor.apply();
+                mSelectedDcCrimeTypes.clear();
+            }
+        });
+        dcAlertBuilder.setNeutralButton("Reset Options and Close", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.putStringSet(Constants.SELECTED_DC_CRIME_TYPES_OPTION, null);
+                editor.apply();
+                mSelectedDcCrimeTypes.clear();
+            }
+        });
+        dcAlertBuilder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+                mSelectedDcCrimeTypes.clear();
+            }
+        });
+        setDcClusteringFeatures.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                dcAlertBuilder.create().show();
+            }
+        });
+        // NOVA
+        Button setNovaClusteringFeatures = (Button) view.findViewById(R.id.button_set_nova_clustering_features);
+        final AlertDialog.Builder novaAlertBuilder = new AlertDialog.Builder(getContext());
+        novaAlertBuilder.setMultiChoiceItems(Constants.NOVA_CRIME_TYPES, null, new DialogInterface.OnMultiChoiceClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+                if (isChecked) {
+                    mSelectedNovaCrimeTypes.add(Constants.NOVA_CRIME_TYPES[which]);
+                } else {
+                    mSelectedNovaCrimeTypes.remove(Constants.NOVA_CRIME_TYPES[which]);
+                }
+            }
+        });
+        novaAlertBuilder.setNeutralButton("Reset Options and Close", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.putStringSet(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, null);
+                editor.apply();
+                mSelectedNovaCrimeTypes.clear();
+            }
+        });
+        novaAlertBuilder.setPositiveButton("Okay", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.putStringSet(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, new HashSet<>(mSelectedNovaCrimeTypes));
+                editor.apply();
+                mSelectedNovaCrimeTypes.clear();
+            }
+        });
+        novaAlertBuilder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.cancel();
+                mSelectedNovaCrimeTypes.clear();
+            }
+        });
+        setNovaClusteringFeatures.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                novaAlertBuilder.create().show();
             }
         });
 
