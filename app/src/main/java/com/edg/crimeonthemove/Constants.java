@@ -123,4 +123,6 @@ public class Constants {
     public static final String BACK_END_NOVA_CRIME_TYPES_PARAM = "nova";
     public static final String BACK_END_DC_CRIME_TYPES_PARAM = "dc";
     public static final String BACK_END_CRIME_OUTLINES_PARAM = "outlines";
+    public static final String BACK_END_CLUSTERING_CRIME_OUTLINES_PARAM = "area_outline";
+    public static final String BACK_END_FAILURE_KEY = "failure";
 }

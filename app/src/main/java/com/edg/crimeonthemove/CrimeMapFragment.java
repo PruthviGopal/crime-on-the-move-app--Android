@@ -71,7 +71,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     private static final String SELECTED_OVERLAY_INDEX_BUNDLE_KEY = "SelectedOverlayIndexBundleKey";
 
     // Static fields
-    private static final float DEFAULT_ZOOM_LEVEL = 8;
+    private static final float DEFAULT_ZOOM_LEVEL = 9;//8;
     private static final int[] colors = {
             0x8FFFB300, // Vivid Yellow
             0x8F803E75, // Strong Purple
@@ -367,8 +367,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
-        /*
-        TODO: Re-add =D
         Button getDataButton = (Button) view.findViewById(R.id.button_get_crime_data);
         getDataButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -420,7 +418,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 }
             }
         });
-        */
+
         Button getClusteringButton = (Button) view.findViewById(R.id.button_get_clustering);
         getClusteringButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -486,6 +484,25 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
 
                 // Number of clusters
                 int numClusters = mOptions.getInt(Constants.NUM_CLUSTERS_OPTION, -1);
+
+                // Area to cluster on
+                // TODO: Expand beyond K-Means
+                if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED
+                        && mSelectedOverlayIndex != -1) {
+                    OverlayWrapper overlayWrapper = mAreaOverlays.get(mSelectedOverlayIndex);
+                    List<LatLng> outline = overlayWrapper.getPoints();
+                    // Format points and place into JSONArray
+                    JSONArray jsonOutline = new JSONArray();
+                    for (int i = 0; i < outline.size(); i++) {
+                        try {
+                            jsonOutline.put(i, "(" + outline.get(i).longitude
+                                    + ", " + outline.get(i).latitude + ")");
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    params.put(Constants.BACK_END_CLUSTERING_CRIME_OUTLINES_PARAM, jsonOutline.toString());
+                }
 
                 // Type of clustering
                 if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED) {
@@ -611,7 +628,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         if (mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
             mClusterManager = new ClusterManager<>(getContext(), mGoogleMap);
             mGoogleMap.setOnCameraChangeListener(mClusterManager);
-            // mGoogleMap.setOnMarkerClickListener(mClusterManager);
+            mGoogleMap.setOnMarkerClickListener(mClusterManager);
         }
     }
 
@@ -1045,6 +1062,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             mAreaOverlays.get(i).remove();
         }
         mAreaOverlays.clear();
+        mSelectedOverlayIndex = -1;
     }
 
     /**

@@ -168,6 +168,7 @@ public class Cache {
                 String selection = build.toString();
                 Log.d(TAG, "selection is: " + selection);
                 cursor = database.query(NOVA_CRIME_TABLE_NAME, null, selection, null, null, null, null, null);
+                Log.d(TAG, "retrieved: " + cursor.getCount() + " records");
             // Get all nova crime data
             } else {
                 cursor = database.query(NOVA_CRIME_TABLE_NAME, null, null, null, null, null, null, null);
@@ -502,7 +503,6 @@ public class Cache {
     //~Begin Area Outline Crimes Stuff--------------------------------------------------------------
     public void insertAreaCrimes(Context context, JSONObject areasCrimes) throws JSONException{
         Log.v(TAG, "insertAreaCrimes");
-        Log.d(TAG, "areasCrimes: " + areasCrimes);
         DatabaseAccessPoint accessPoint = new DatabaseAccessPoint(context);
         SQLiteDatabase database = accessPoint.getWritableDatabase();
 
@@ -515,7 +515,6 @@ public class Cache {
         while (jsonAreasIt.hasNext()) {
             String areaKey = jsonAreasIt.next();
             JSONArray areaCrimes = areasCrimes.getJSONArray(areaKey);
-            Log.d(TAG, "areaCrimes: " + areaCrimes.toString());
             for (int i = 0; i < areaCrimes.length(); i++) {
                 areaCrime = areaCrimes.getJSONObject(i);
                 Iterator<String> jsonIt = areaCrime.keys();

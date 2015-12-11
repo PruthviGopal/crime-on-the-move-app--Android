@@ -530,14 +530,27 @@ public class WebServiceClient {
             @Override
             public void onSuccess(int statusCode, Header[] headers, JSONObject response) {
                 Log.i(TAG, "onSuccess with JSONObject");
-                Map<String, List<LatLng>> clusterConvexHulls = new HashMap<>();
-                Map<String, Map<String, String>> clusterStatistics = new HashMap<>();
-                try {
-                    Utils.areaResultsProcessor(clusterConvexHulls, clusterStatistics, response);
-                } catch (JSONException e) {
-                    e.printStackTrace();
+
+
+                // FAILURE!
+                if (response.has(Constants.BACK_END_FAILURE_KEY)) {
+                    try {
+                        Log.e(TAG, "Clustering failed, see back end error: "
+                                + response.getString(Constants.BACK_END_FAILURE_KEY));
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                // SUCCESSS!
+                } else {
+                    Map<String, List<LatLng>> clusterConvexHulls = new HashMap<>();
+                    Map<String, Map<String, String>> clusterStatistics = new HashMap<>();
+                    try {
+                        Utils.areaResultsProcessor(clusterConvexHulls, clusterStatistics, response);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                    resultsCommunicator.useResults(clusterConvexHulls, clusterStatistics);
                 }
-                resultsCommunicator.useResults(clusterConvexHulls, clusterStatistics);
             }
 
             @Override
