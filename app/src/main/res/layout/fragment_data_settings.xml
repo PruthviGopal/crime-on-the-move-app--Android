@@ -91,12 +91,14 @@
                 android:layout_height="wrap_content"
                 android:checked="false"
                 android:text="Spectral Clustering"/>
+            <!--
             <RadioButton
                 android:id="@+id/radio_button_affinity_propagation"
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
                 android:checked="false"
                 android:text="Affinity Propagation"/>
+            -->
         </RadioGroup>
 
         <TextView
@@ -108,10 +110,26 @@
             android:layout_width="fill_parent"
             android:layout_height="wrap_content" />
 
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Crimes to Cluster On" />
+        <CheckBox
+            android:id="@+id/checkbox_mild_crime_severity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Mild Crime Severity"/>
+        <CheckBox
+            android:id="@+id/checkbox_moderate_crime_severity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Moderate Crime Severity"/>
+        <CheckBox
+            android:id="@+id/checkbox_extreme_crime_severity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Extreme Crime Severity"/>
         <Button
             android:id="@+id/button_set_dc_clustering_features"
             android:layout_width="180dp"

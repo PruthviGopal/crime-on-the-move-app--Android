@@ -115,6 +115,82 @@ public class Constants {
             "domestic dispute"
     };
 
+    // DC crime categories
+    public static final String[] DC_MILD_SEVERITY_CRIMES = {
+            "THEFT/OTHER"
+    };
+    public static final String[] DC_MODERATE_SEVERITY_CRIMES = {
+            "MOTOR VEHICLE THEFT",
+            "ROBBERY",
+            "THEFT F/AUTO",
+            "BURGLARY"
+    };
+    public static final String[] DC_EXTREME_SEVERITY_CRIMES = {
+            "SEX ABUSE",
+            "HOMICIDE",
+            "ARSON",
+            "ASSAULT W/DANGEROUS WEAPON"
+    };
+
+
+    // Nova crime categories
+    public static final String[] NOVA_MILD_SEVERITY_CRIMES = {
+            "drunk in public",
+            "other violations",
+            "vandalism",
+            "suspicious event",
+            "graffiti",
+            "trespassing",
+            "disorderly conduct",
+            "found property",
+            "domestic dispute"
+    };
+    public static final String[] NOVA_MODERATE_SEVERITY_CRIMES = {
+            "grand larceny",
+            "larceny",
+            "motor vehicle theft",
+            "burglary",
+            "robbery",
+            "destruction of property",
+            "larceny from a vehicle",
+            "indecent exposure",
+            "peeping tom",
+            "hit and run",
+            "fraud",
+            "larceny from building",
+            "unlawful entry",
+            "larceny shoplifting",
+            "tampering with a vehicle",
+            "petit larceny",
+            "damage to property",
+            "exposure",
+            "driving under the influence",
+            "animal",
+            "breaking and entering",
+            "driving while intoxicated",
+            "fatal crash",
+            "residential burgalry",
+            "pursuit"
+    };
+    public static final String[] NOVA_EXTREME_SEVERITY_CRIMES = {
+            "battery",
+            "simple assault",
+            "assault",
+            "malicious wounding",
+            "armed robbery",
+            "felonious assault",
+            "sexual assault",
+            "abduction",
+            "bank robbery",
+            "robbery by force",
+            "sexual battery",
+            "homicide",
+            "assault by mob",
+            "carjacking",
+            "arson",
+            "burglary of occupied dwelling"
+    };
+
     // Server Side Parameters
     public static final String BACK_END_NUM_CLUSTERS_PARAM = "num_clusters";
     public static final String BACK_END_NOVA_DATA_PARAM = "nova_data";

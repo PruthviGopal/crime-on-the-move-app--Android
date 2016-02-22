@@ -21,29 +21,37 @@
         android:layout_height="60dp"
         android:orientation="horizontal">
 
+        <!--
         <Button
             android:id="@+id/button_get_crime_data"
             android:layout_width="100dp"
             android:layout_height="fill_parent"
             android:text="Update Data"/>
+        -->
 
         <Button
             android:id="@+id/button_get_selected_overlay_data"
-            android:layout_width="100dp"
+            android:layout_width="80dp"
             android:layout_height="fill_parent"
-            android:text="Overlay Data"/>
+            android:text="Get Data"/>
 
         <Button
             android:id="@+id/button_get_clustering"
-            android:layout_width="100dp"
+            android:layout_width="85dp"
             android:layout_height="fill_parent"
-            android:text="Update Clustering Data"/>
+            android:text="Cluster"/>
 
         <Button
             android:id="@+id/button_get_overlays"
-            android:layout_width="100dp"
+            android:layout_width="95dp"
             android:layout_height="fill_parent"
-            android:text="Get County Overlays"/>
+            android:text="Overlays"/>
+
+        <Button
+            android:id="@+id/button_clear_markers"
+            android:layout_width="90dp"
+            android:layout_height="fill_parent"
+            android:text="Clear Markers"/>
 
     </LinearLayout>
 </LinearLayout>

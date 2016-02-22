@@ -37,7 +37,7 @@ public class WebServiceClient {
     }
 
     private static final String TAG = "WebServiceClient";
-    private static final String BASE_URL = "http://52.23.201.83:5000/spatialdb/";
+    private static final String BASE_URL = "http://52.90.189.212:5000/spatialdb/";
 
     private static AsyncHttpClient client = new AsyncHttpClient();
 
@@ -560,7 +560,7 @@ public class WebServiceClient {
 
             @Override
             public void onFailure(int statusCode, Header[] headers, String message, Throwable throwable) {
-                Log.w(TAG, "Request failure in getSpectralClustering"
+                Log.w(TAG, "Request failure in getKMeans"
                         + "\nStatusCode: " + statusCode
                         + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + message);
@@ -569,7 +569,7 @@ public class WebServiceClient {
             @Override
             public void onFailure(int statusCode, Header[] headers, Throwable throwable,
                                   JSONObject response) {
-                Log.w(TAG, "Request failure in getSpectralClustering"
+                Log.w(TAG, "Request failure in getKMeans"
                         + "\nStatusCode: " + statusCode
                         + "\nHeaders: " + Arrays.toString(headers)
                         + "\nMessage: " + response);

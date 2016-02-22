@@ -49,6 +49,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
@@ -68,9 +69,13 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
 
     // Bundle Keys
     private static final String AREA_OVERLAYS_BUNDLE_KEY = "AreaOverlaysBundleKey";
+    private static final String CRIME_MARKERS_BUNDLE_KEY = "CrimeMarkersBundleKey";
     private static final String SELECTED_OVERLAY_INDEX_BUNDLE_KEY = "SelectedOverlayIndexBundleKey";
 
     // Static fields
+    private static final String MARKER_SNIPPET_HEADER = "MarkerSnippetHeader: ";
+    private static final String POLYGON_SNIPPET_HEADER = "PolygonSnippetHeader: ";
+
     private static final float DEFAULT_ZOOM_LEVEL = 9;//8;
     private static final int[] colors = {
             0x8FFFB300, // Vivid Yellow
@@ -117,6 +122,58 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         }
     }
 
+    public static class MarkerWrapper implements Parcelable {
+
+        public Marker marker;
+
+        public MarkerWrapper(Marker newMarker) {
+            marker = newMarker;
+        }
+
+        /**
+         * Describe the kinds of special objects contained in this Parcelable's
+         * marshalled representation.
+         *
+         * @return a bitmask indicating the set of special object types marshalled
+         * by the Parcelable.
+         */
+        @Override
+        public int describeContents() {
+            return 0;
+        }
+
+        /**
+         * Flatten this object in to a Parcel.
+         *
+         * @param dest  The Parcel in which the object should be written.
+         * @param flags Additional flags about how the object should be written.
+         *              May be 0 or {@link #PARCELABLE_WRITE_RETURN_VALUE}.
+         */
+        @Override
+        public void writeToParcel(Parcel dest, int flags) {
+            dest.writeDouble(marker.getPosition().latitude);
+            dest.writeDouble(marker.getPosition().longitude);
+        }
+
+        // Parcelable interface implementation
+        public final Creator<MarkerWrapper> CREATOR = new Creator<MarkerWrapper>() {
+            @Override
+            public MarkerWrapper createFromParcel(Parcel in) {
+                return new MarkerWrapper(in);
+            }
+
+            @Override
+            public MarkerWrapper[] newArray(int size) {
+                return new MarkerWrapper[size];
+            }
+        };
+
+        public MarkerWrapper(Parcel in) {
+            double latitude = in.readDouble();
+            double longitude = in.readDouble();
+        }
+    }
+
     /**
      * Class which wraps an overlay containing:
      *  a Polygon on the GoogleMap
@@ -138,6 +195,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         public final Map<String, String> statistics;
 
         private boolean isHighlighted;
+        private MarkerOptions markerOptions;
 
         public OverlayWrapper(String name, int color, Polygon polygon, Marker marker, Map<String, String> statistics) {
             this.name = name;
@@ -177,11 +235,32 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         }
 
         public void restorePolygons(GoogleMap googleMap) {
-            polygon = googleMap.addPolygon(new PolygonOptions()
-                    .addAll(polygonPoints)
-                    .fillColor(color)
-                    .strokeColor(color)
-                    .zIndex(20));
+            if (holes.size() > 0) {
+                polygon = googleMap.addPolygon(new PolygonOptions()
+                        .addAll(polygonPoints)
+                        .fillColor(color)
+                        .addHole(holes.get(0))
+                        .strokeColor(color)
+                        .zIndex(20));
+            } else {
+                polygon = googleMap.addPolygon(new PolygonOptions()
+                        .addAll(polygonPoints)
+                        .fillColor(color)
+                        .strokeColor(color)
+                        .zIndex(20));
+            }
+            if (markerOptions != null) {
+                Log.i(TAG, "RESTORED INVISIBLE MARKER TOO!");
+                marker = googleMap.addMarker(markerOptions);
+            } else if (marker != null) {
+                marker = googleMap.addMarker(new MarkerOptions()
+                        .title(marker.getTitle())
+                        .snippet(marker.getSnippet())
+                        .alpha(0)
+                        .icon(getCircleMarkerIcon())
+                        .position(marker.getPosition()));
+
+            }
         }
 
         // Parcelable interface implementation
@@ -224,6 +303,11 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             dest.writeList(holes);
             dest.writeInt(color);
             dest.writeInt(isHighlighted ? 1 : 0);
+            // Marker
+            dest.writeString(marker.getTitle());
+            dest.writeString(marker.getSnippet());
+            dest.writeDouble(marker.getPosition().latitude);
+            dest.writeDouble(marker.getPosition().longitude);
         }
 
         /**
@@ -232,6 +316,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
          * @param in Parcel.
          */
         public OverlayWrapper(Parcel in) {
+            Log.i(TAG, "OVERLAY WRAPPER PARCELABLE CONSTRUCTOR!");
             polygonPoints = new ArrayList<>();
             holes = new ArrayList<>(1);
             statistics = new HashMap<>(5);
@@ -243,6 +328,17 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             in.readList(holes, null);
             color = in.readInt();
             isHighlighted = in.readInt() == 1;
+            String title = in.readString();
+            String snippet = in.readString();
+            double latitude = in.readDouble();
+            double longitude = in.readDouble();
+
+            markerOptions = new MarkerOptions()
+                    .position(new LatLng(latitude, longitude))
+                    .icon(getCircleMarkerIcon())
+                    .alpha(0)
+                    .title(title)
+                    .snippet(snippet);
         }
     }
 
@@ -251,6 +347,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     private MapView mMapView;
     private GoogleMap mGoogleMap;
     private ClusterManager<MarkerClusterItem> mClusterManager;
+    private ArrayList<MarkerWrapper> mMarkers;
     private ArrayList<OverlayWrapper> mAreaOverlays;
     private int mSelectedOverlayIndex;
     private SharedPreferences mOptions;
@@ -326,12 +423,15 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             Log.i(TAG, "onCreate: Restoring from savedInstanceState!");
             mAreaOverlays = savedInstanceState.getParcelableArrayList(AREA_OVERLAYS_BUNDLE_KEY);
             mSelectedOverlayIndex = savedInstanceState.getInt(SELECTED_OVERLAY_INDEX_BUNDLE_KEY);
+            mMarkers = savedInstanceState.getParcelableArrayList(CRIME_MARKERS_BUNDLE_KEY);
             // Remove from bundle because it's breaking other restore instance states
             // with an unknown class exception...that's kind of stupid though...
             savedInstanceState.remove(AREA_OVERLAYS_BUNDLE_KEY);
+            savedInstanceState.remove(CRIME_MARKERS_BUNDLE_KEY);
         } else {
             mAreaOverlays = new ArrayList<>(7);
             mSelectedOverlayIndex = -1;
+            mMarkers = new ArrayList<>(50);
         }
         mCache = new Cache();
 
@@ -367,6 +467,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             }
         });
 
+        /*
         Button getDataButton = (Button) view.findViewById(R.id.button_get_crime_data);
         getDataButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -418,6 +519,14 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 }
             }
         });
+        */
+        Button clearMarkersButton = (Button) view.findViewById(R.id.button_clear_markers);
+        clearMarkersButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                clearMarkers();
+            }
+        });
 
         Button getClusteringButton = (Button) view.findViewById(R.id.button_get_clustering);
         getClusteringButton.setOnClickListener(new View.OnClickListener() {
@@ -428,20 +537,33 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
 
                 Map<String, String> params = new HashMap<>();
 
-                // Data to cluster on
-                // Nova
-                if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
+                // If nothing is selected, fall back to check boxes
+                if (mSelectedOverlayIndex == -1) {
+                    // Data to cluster on
+                    // Nova counties from settings checkboxes
+                    if (mOptions.getBoolean(Constants.NOVA_DATA_OPTION, false)) {
+                        List<String> counties = new ArrayList<>(Constants.COUNTY_CRIME_OPTIONS.length);
+                        for (int i = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
+                            String countyOption = Constants.COUNTY_CRIME_OPTIONS[i];
+                            if (mOptions.getBoolean(countyOption, false)) {
+                                counties.add(Constants.COUNTY_NAMES.get(countyOption));
+                            }
+                        }
+                        params.put(Constants.BACK_END_NOVA_DATA_PARAM, new JSONArray(counties).toString());
+                    }
+                    // DC from settings checkbox
+                    if (mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
+                        params.put(Constants.BACK_END_DC_DATA_PARAM, Constants.BACK_END_DC_DATA_PARAM);
+                    }
+                    // Include nova and dc data, you never know what's outlined!
+                    /// Add every Nova county name!
+                } else {
                     List<String> counties = new ArrayList<>(Constants.COUNTY_CRIME_OPTIONS.length);
                     for (int i = 0; i < Constants.COUNTY_CRIME_OPTIONS.length; i++) {
                         String countyOption = Constants.COUNTY_CRIME_OPTIONS[i];
-                        if (mOptions.getBoolean(countyOption, false)) {
-                            counties.add(Constants.COUNTY_NAMES.get(countyOption));
-                        }
+                        counties.add(Constants.COUNTY_NAMES.get(countyOption));
                     }
                     params.put(Constants.BACK_END_NOVA_DATA_PARAM, new JSONArray(counties).toString());
-                }
-                // DC
-                if (mOptions.getBoolean(Constants.DC_DATA_OPTION, false)) {
                     params.put(Constants.BACK_END_DC_DATA_PARAM, Constants.BACK_END_DC_DATA_PARAM);
                 }
 
@@ -486,8 +608,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 int numClusters = mOptions.getInt(Constants.NUM_CLUSTERS_OPTION, -1);
 
                 // Area to cluster on
-                // TODO: Expand beyond K-Means
-                if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED
+                // TODO: Expand beyond K-Means (and perhaps beyond spectral?)
+                if ((mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED
+                            || mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.SPECTRAL_CLUSTERING_SELECTED)
                         && mSelectedOverlayIndex != -1) {
                     OverlayWrapper overlayWrapper = mAreaOverlays.get(mSelectedOverlayIndex);
                     List<LatLng> outline = overlayWrapper.getPoints();
@@ -508,18 +631,30 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                 if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.K_MEANS_SELECTED) {
                     params.put(Constants.BACK_END_NUM_CLUSTERS_PARAM, String.valueOf(numClusters));
                     mListener.getKMeansClusteringData(params);
-                    clearOverlays();
+                    if (mSelectedOverlayIndex == -1) {
+                        clearOverlays();
+                    } else {
+                        removeOverlay(mSelectedOverlayIndex);
+                    }
                     Toast.makeText(getActivity(), "Running K-Means Clustering...",
                             Toast.LENGTH_SHORT).show();
                 } else if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.SPECTRAL_CLUSTERING_SELECTED) {
                     params.put(Constants.BACK_END_NUM_CLUSTERS_PARAM, String.valueOf(numClusters));
                     mListener.getSpectralClusteringData(params);
-                    clearOverlays();
+                    if (mSelectedOverlayIndex == -1) {
+                        clearOverlays();
+                    } else {
+                        removeOverlay(mSelectedOverlayIndex);
+                    }
                     Toast.makeText(getActivity(), "Running Spectral Clustering...",
                             Toast.LENGTH_SHORT).show();
                 } else if (mOptions.getInt(Constants.CLUSTERING_SELECTION, -1) == Constants.AFFINITY_PROPAGATION_SELECTED) {
                     mListener.getAffinityPropagationData(params);
-                    clearOverlays();
+                    if (mSelectedOverlayIndex == -1) {
+                        clearOverlays();
+                    } else {
+                        removeOverlay(mSelectedOverlayIndex);
+                    }
                     Toast.makeText(getActivity(), "Running Affinity Propagation...",
                             Toast.LENGTH_SHORT).show();
                 } else {
@@ -534,9 +669,22 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
             public void onClick(View v) {
                 mListener.getCountyOverlays(null);
                 clearOverlays();
+                clearMarkers();
             }
         });
         return view;
+    }
+
+    private void removeOverlay(int overlayIndex) {
+        if (overlayIndex < 0 || overlayIndex >= mAreaOverlays.size()) {
+            Log.w(TAG, "Warning in removeOverlay, overlayIndex out of bounds: " + overlayIndex);
+            return;
+        }
+        mAreaOverlays.get(overlayIndex).remove();
+        mAreaOverlays.remove(overlayIndex);
+        if (overlayIndex == mSelectedOverlayIndex) {
+            mSelectedOverlayIndex = -1;
+        }
     }
 
     @Override
@@ -561,9 +709,11 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                             + selectedOverlay.name);
                     // Hide info window if already shown
                     if (selectedOverlay.marker.isInfoWindowShown()) {
+                        Log.i(TAG, "NOT showing info window");
                         mAreaOverlays.get(selectedOverlayIndex).marker.hideInfoWindow();
                         // Show info window if not shown
                     } else {
+                        Log.i(TAG, "showing info window");
                         mAreaOverlays.get(selectedOverlayIndex).marker.showInfoWindow();
                     }
                 }
@@ -601,25 +751,46 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
 
             @Override
             public View getInfoContents(Marker marker) {
+                if (getContext() == null) {
+                    return null;
+                }
                 LayoutInflater layoutInflater = LayoutInflater.from(getContext());
                 View view = layoutInflater.inflate(R.layout.info_window_view, null);
                 LinearLayout linearLayout = (LinearLayout) view.findViewById(R.id.linear_layout_top);
-
+                Log.i(TAG, "Marker snippet: " + marker.getSnippet());
                 String snippet = marker.getSnippet();
-                String[] topFiveCrimes
-                        = snippet.replace("[", "").replace("]", "").replace("\"", "").split(",");
-                TextView textView;
-                String crime;
-                textView = new TextView(getContext());
-                textView.setText(marker.getTitle() + ": Top 5 Crimes:");
-                textView.setTextSize(25);
-                linearLayout.addView(textView);
-                for (int i = 0; i < topFiveCrimes.length; i++) {
-                    crime = (i + 1) + ": ";
-                    crime += topFiveCrimes[i];
+                // Marker or polygon?
+                if (snippet.contains(MARKER_SNIPPET_HEADER)) {
+                    Log.i(TAG, "Marker Snippet Case");
+                    snippet = snippet.replace(MARKER_SNIPPET_HEADER, "");
+                    TextView titleTextView = new TextView(getContext());
+                    titleTextView.setText(marker.getTitle());
+                    titleTextView.setTextSize(25);
+                    linearLayout.addView(titleTextView);
+                    TextView snippetTextView = new TextView(getContext());
+                    snippetTextView.setText(snippet);
+                    snippetTextView.setTextSize(20);
+                    linearLayout.addView(snippetTextView);
+                } else if (snippet.contains(POLYGON_SNIPPET_HEADER)) {
+                    Log.i(TAG, "POlyGOn Snippet Case");
+                    snippet = snippet.replace(POLYGON_SNIPPET_HEADER, "");
+                    String[] topFiveCrimes
+                            = snippet.replace("[", "").replace("]", "").replace("\"", "").split(",");
+                    TextView textView;
+                    String crime;
                     textView = new TextView(getContext());
-                    textView.setText(crime);
+                    textView.setText(marker.getTitle() + ": Top 5 Crimes:");
+                    textView.setTextSize(25);
                     linearLayout.addView(textView);
+                    for (int i = 0; i < topFiveCrimes.length; i++) {
+                        crime = (i + 1) + ": ";
+                        crime += topFiveCrimes[i];
+                        textView = new TextView(getContext());
+                        textView.setText(crime);
+                        linearLayout.addView(textView);
+                    }
+                } else {
+                    Log.e(TAG, "No particular type of marker...: " + snippet);
                 }
                 return view;
             }
@@ -744,6 +915,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         mMapView.onSaveInstanceState(outState);
         outState.putParcelableArrayList(AREA_OVERLAYS_BUNDLE_KEY, mAreaOverlays);
         outState.putInt(SELECTED_OVERLAY_INDEX_BUNDLE_KEY, mSelectedOverlayIndex);
+        outState.putParcelableArrayList(CRIME_MARKERS_BUNDLE_KEY, mMarkers);
     }
 
     @Override
@@ -751,6 +923,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
         Log.i(TAG, "onPause");
         super.onPause();
         mMapView.onPause();
+        for (int i = 0; i < mAreaOverlays.size(); i++) {
+            mAreaOverlays.get(i).marker.hideInfoWindow();
+        }
     }
 
     @Override
@@ -792,7 +967,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     public void addNovaCrimes(String[] countyConstraints) {
         Log.i(TAG, "addNovaCrimes()");
         Log.i(TAG, "countyConstraints: " + Arrays.toString(countyConstraints));
-        Toast.makeText(getContext(), "Placing crime markers, this may take awhile.....",
+        Toast.makeText(getContext(), "Placing NOVA crime markers, this may take awhile.....",
                 Toast.LENGTH_LONG).show();
         final Cache.NovaCrimeQuery novaCrimeQuery = new Cache.NovaCrimeQuery(getContext(), countyConstraints) {
             private int i = 0;
@@ -809,8 +984,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                         if (!mOptions.getBoolean(Constants.CLUSTER_MARKERS_OPTION, false)) {
                             Marker marker = mGoogleMap.addMarker(new MarkerOptions()
                                     .title(offense)
-                                    .snippet(address)
+                                    .snippet(MARKER_SNIPPET_HEADER + address)
                                     .position(latLng));
+                            mMarkers.add(new MarkerWrapper(marker));
                         } else {
                             mClusterManager.addItem(new MarkerClusterItem(latLng));
                         }
@@ -861,8 +1037,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     public void run() {
                         Marker marker = mGoogleMap.addMarker(new MarkerOptions()
                                 .title(offense)
-                                .snippet(address)
+                                .snippet(MARKER_SNIPPET_HEADER + address)
                                 .position(latLng));
+                        mMarkers.add(new MarkerWrapper(marker));
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
                             if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
@@ -917,8 +1094,9 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     public void run() {
                         Marker marker = mGoogleMap.addMarker(new MarkerOptions()
                                 .title(offense)
-                                .snippet(offense)
+                                .snippet(MARKER_SNIPPET_HEADER + address)
                                 .position(latLng));
+                        mMarkers.add(new MarkerWrapper(marker));
                         if (i == 0) {
                             mGoogleMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
                             if (mGoogleMap.getCameraPosition().zoom < DEFAULT_ZOOM_LEVEL) {
@@ -953,24 +1131,26 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      */
     public void addAreaOverlay(Map<String, List<LatLng>> areaBoundaries,
             Map<String, Map<String, String>> areaStatistics) {
-        //Polygon polygon;
         Marker marker = null;
         Map<String, String> specificAreaStatistics;
         String statisticsString;
         Polygon polygon;
+        Random random = new Random();
         for (String key : areaBoundaries.keySet()) {
             // Handle coloring for integer strings and regular strings
+            int colorKey;
             if (isInteger(key)
                     && Integer.parseInt(key) < colors.length && Integer.parseInt(key) > -1) {
+                colorKey = Math.abs((Integer.parseInt(key) + random.nextInt()) % colors.length);
                 polygon = mGoogleMap.addPolygon(new PolygonOptions()
                         .addAll(areaBoundaries.get(key))
-                        .fillColor(colors[Integer.parseInt(key)])
-                        .strokeColor(colors[Integer.parseInt(key)])
+                        .fillColor(colors[colorKey])
+                        .strokeColor(colors[colorKey])
                         .zIndex(20));
             } else {
                 // Take hash code and mod by color length, this should produce random enough color
                 // dispersion to be visually appealing.
-                int colorKey = key.hashCode() % colors.length;
+                colorKey = Math.abs((key.hashCode() + random.nextInt()) % colors.length);
                 polygon = mGoogleMap.addPolygon(new PolygonOptions()
                         .addAll(areaBoundaries.get(key))
                         .fillColor(colors[colorKey])
@@ -993,13 +1173,13 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                         .icon(getCircleMarkerIcon())
                         .alpha(0)
                         .title("Cluster " + key)
-                        .snippet(statisticsString));
+                        .snippet(POLYGON_SNIPPET_HEADER + statisticsString));
             }
             if (areaStatistics.get(key) != null) {
-                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, marker,
+                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, colors[colorKey], polygon, marker,
                         areaStatistics.get(key)));
             } else {
-                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, 0, polygon, null, null));
+                mAreaOverlays.add(new OverlayWrapper("Cluster " + key, colors[colorKey], polygon, null, null));
             }
         }
     }
@@ -1010,7 +1190,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      *
      * @return BitmapDescriptor with the circle drawn in it.
      */
-    private BitmapDescriptor getCircleMarkerIcon() {
+    private static BitmapDescriptor getCircleMarkerIcon() {
         ShapeDrawable shapeDrawable = new ShapeDrawable(new OvalShape());
         shapeDrawable.setIntrinsicHeight(5);
         shapeDrawable.setIntrinsicWidth(5);
@@ -1066,11 +1246,20 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
     }
 
     /**
+     * Clears all markers currently drawn on the GoogleMap.
+     */
+    public void clearMarkers() {
+        Log.i(TAG, "clearMarkers called...");
+        for (int i = 0; i < mMarkers.size(); i++) {
+            mMarkers.get(i).marker.remove();
+        }
+        mMarkers.clear();
+    }
+
+    /**
      * Add overlays for counties in Virginia.
      */
     public void addCountyOverlay() {
-        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....",
-                Toast.LENGTH_LONG).show();
         final Cache.NovaCountyQuery novaCountyQuery = new Cache.NovaCountyQuery(getContext()) {
             @Override
             public void useData(final String countyName, final List<LatLng> countyOutline,
@@ -1095,7 +1284,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                                 .icon(getCircleMarkerIcon())
                                 .alpha(0)
                                 .title(countyName)
-                                .snippet(statisticsString));
+                                .snippet(POLYGON_SNIPPET_HEADER + statisticsString));
                         mAreaOverlays.add(new OverlayWrapper(countyName,
                                 getCountyAndDcColor(countyName), polygon, marker,
                                 countyStatistics));
@@ -1113,8 +1302,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     e.printStackTrace();
                     Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
                 }
-                Toast.makeText(getContext(), "Done drawing county areas!",
-                        Toast.LENGTH_SHORT).show();
                 mHandler.removeCallbacks(mOverlayHoleFindingTask);
                 mHandler.post(mOverlayHoleFindingTask);
             }
@@ -1125,8 +1312,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
      * Add overlays for DC (potentially wards if that information surfaces...).
      */
     public void addDcOverlay() {
-        Toast.makeText(getContext(), "Drawing areas, this may take awhile.....",
-                Toast.LENGTH_LONG).show();
         final Cache.DcOutlineQuery dcOutlineQuery = new Cache.DcOutlineQuery(getContext()) {
             @Override
             public void useData(final String wardName, final List<LatLng> wardOutline,
@@ -1151,7 +1336,7 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                                 .icon(getCircleMarkerIcon())
                                 .alpha(0)
                                 .title(wardName)
-                                .snippet(statisticsString));
+                                .snippet(POLYGON_SNIPPET_HEADER + statisticsString));
                         mAreaOverlays.add(new OverlayWrapper(wardName,
                                 getCountyAndDcColor(wardName), polygon, marker,
                                 wardStatistics));
@@ -1169,7 +1354,6 @@ public class CrimeMapFragment extends Fragment implements OnMapReadyCallback {
                     e.printStackTrace();
                     Log.e(TAG, "JSONException IN addAreaOverlay IN CrimeMapFragment");
                 }
-                Toast.makeText(getContext(), "Done drawing DC areas!", Toast.LENGTH_SHORT).show();
                 mHandler.removeCallbacks(mOverlayHoleFindingTask);
                 mHandler.post(mOverlayHoleFindingTask);
             }

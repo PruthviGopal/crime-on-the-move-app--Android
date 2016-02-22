@@ -24,6 +24,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.SeekBar;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -172,9 +173,12 @@ public class DataSettingsFragment extends Fragment {
                 radioButton = (RadioButton) clusteringAlgorithmRadioGroup
                         .findViewById(R.id.radio_button_spectral_clustering);
                 break;
+            /*
             case Constants.AFFINITY_PROPAGATION_SELECTED:
                 radioButton = (RadioButton) clusteringAlgorithmRadioGroup
                         .findViewById(R.id.radio_button_affinity_propagation);
+                break;
+            */
             default:
                 Log.e(TAG, "PROBLEM in initializing clustering selection radio buttons, default case hit!");
                 break;
@@ -197,9 +201,11 @@ public class DataSettingsFragment extends Fragment {
                     case R.id.radio_button_spectral_clustering:
                         editor.putInt(Constants.CLUSTERING_SELECTION, Constants.SPECTRAL_CLUSTERING_SELECTED);
                         break;
+                    /*
                     case R.id.radio_button_affinity_propagation:
                         editor.putInt(Constants.CLUSTERING_SELECTION, Constants.AFFINITY_PROPAGATION_SELECTED);
                         break;
+                    */
                     default:
                         Log.e(TAG, "PROBLEM IN onCheckedChanged for clustering algorithm selection, default case hit!");
                         break;
@@ -209,6 +215,66 @@ public class DataSettingsFragment extends Fragment {
         });
 
         // Clustering features selection (crime type)
+        // CRIME CATEGORY SELECTION-----------------------------------------------------------------
+        // DC
+        Set<String> currentNovaCrimeTypes = mOptions.getStringSet(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, new HashSet<String>());
+        Set<String> currentDcCrimeTypes = mOptions.getStringSet(Constants.SELECTED_DC_CRIME_TYPES_OPTION, new HashSet<String>());
+        final CheckBox mildSeverityCheckBox = (CheckBox) view.findViewById(R.id.checkbox_mild_crime_severity);
+        if (currentNovaCrimeTypes.containsAll(Arrays.asList(Constants.NOVA_MILD_SEVERITY_CRIMES))
+                && currentDcCrimeTypes.containsAll(Arrays.asList(Constants.DC_MILD_SEVERITY_CRIMES))) {
+            mildSeverityCheckBox.setChecked(true);
+        }
+        final CheckBox moderateSeverityCheckBox = (CheckBox) view.findViewById(R.id.checkbox_moderate_crime_severity);
+        if (currentNovaCrimeTypes.containsAll(Arrays.asList(Constants.NOVA_MODERATE_SEVERITY_CRIMES))
+                && currentDcCrimeTypes.containsAll(Arrays.asList(Constants.DC_MODERATE_SEVERITY_CRIMES))) {
+            moderateSeverityCheckBox.setChecked(true);
+        }
+        final CheckBox extremeSeverityCheckBox = (CheckBox) view.findViewById(R.id.checkbox_extreme_crime_severity);
+        if (currentNovaCrimeTypes.containsAll(Arrays.asList(Constants.NOVA_EXTREME_SEVERITY_CRIMES))
+                && currentDcCrimeTypes.containsAll(Arrays.asList(Constants.DC_EXTREME_SEVERITY_CRIMES))) {
+            extremeSeverityCheckBox.setChecked(true);
+        }
+        final CompoundButton.OnCheckedChangeListener severityListener
+                = new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                SharedPreferences.Editor editor = mOptions.edit();
+                editor.remove(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION);
+                editor.remove(Constants.SELECTED_DC_CRIME_TYPES_OPTION);
+                HashSet<String> novaCrimes = new HashSet<>();
+                HashSet<String> dcCrimes = new HashSet<>();
+                // Mild
+                if ((buttonView.getId() != mildSeverityCheckBox.getId()
+                            && mildSeverityCheckBox.isChecked())
+                        || (buttonView.getId() == mildSeverityCheckBox.getId() && isChecked)) {
+                    novaCrimes.addAll(Arrays.asList(Constants.NOVA_MILD_SEVERITY_CRIMES));
+                    dcCrimes.addAll(Arrays.asList(Constants.DC_MILD_SEVERITY_CRIMES));
+                }
+                // Moderate
+                if ((buttonView.getId() != moderateSeverityCheckBox.getId()
+                            && moderateSeverityCheckBox.isChecked())
+                        || (buttonView.getId() == moderateSeverityCheckBox.getId() && isChecked)) {
+                    novaCrimes.addAll(Arrays.asList(Constants.NOVA_MODERATE_SEVERITY_CRIMES));
+                    dcCrimes.addAll(Arrays.asList(Constants.DC_MODERATE_SEVERITY_CRIMES));
+                }
+                // Extreme
+                if ((buttonView.getId() != extremeSeverityCheckBox.getId()
+                        && extremeSeverityCheckBox.isChecked())
+                        || (buttonView.getId() == extremeSeverityCheckBox.getId() && isChecked)) {
+                    novaCrimes.addAll(Arrays.asList(Constants.NOVA_EXTREME_SEVERITY_CRIMES));
+                    dcCrimes.addAll(Arrays.asList(Constants.DC_EXTREME_SEVERITY_CRIMES));
+                }
+
+                editor.putStringSet(Constants.SELECTED_NOVA_CRIME_TYPES_OPTION, novaCrimes);
+                editor.putStringSet(Constants.SELECTED_DC_CRIME_TYPES_OPTION, dcCrimes);
+                editor.apply();
+            }
+        };
+        mildSeverityCheckBox.setOnCheckedChangeListener(severityListener);
+        moderateSeverityCheckBox.setOnCheckedChangeListener(severityListener);
+        extremeSeverityCheckBox.setOnCheckedChangeListener(severityListener);
+
+        // SPECIFIC CRIME SELECTION-----------------------------------------------------------------
         // DC
         Button setDcClusteringFeatures = (Button) view.findViewById(R.id.button_set_dc_clustering_features);
         final AlertDialog.Builder dcAlertBuilder = new AlertDialog.Builder(getContext());
